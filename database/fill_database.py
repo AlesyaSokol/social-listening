@@ -68,7 +68,6 @@ class Database:
 
     def add_embeddings(self, embeddings):
         sql = """INSERT INTO embeddings (post_id, embedding) VALUES (%s, %s);"""
-        print(embeddings)
         try:
             self.cur.executemany(sql, embeddings)
             self.conn.commit()
