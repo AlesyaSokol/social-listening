@@ -1,0 +1,4 @@
+.env
+venv
+database/test_data
+database/__pycache__
