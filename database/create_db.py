@@ -5,10 +5,6 @@ import dotenv
 
 dotenv.load_dotenv('../.env')
 
-#psql postgres
-# create database social_listening;
-# create user test with login password 'testtest';
-
 DB_NAME = os.getenv('POSTGRES_DB')  
 DB_USER = os.getenv('POSTGRES_USER')   
 DB_PASS = os.getenv('POSTGRES_PASSWORD') 
