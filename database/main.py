@@ -11,6 +11,7 @@ import numpy as np
 import tiktoken
 import dotenv
 import os
+import numpy as np
 
 from fill_database import Database
 
