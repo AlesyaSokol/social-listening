@@ -104,7 +104,7 @@ def ProcessWithToken(ids_and_dates, token, token_id):
 
         posts = GetPosts(owner_id, offset, token, last_date)
         if posts:
-            id_last_date.append([owner_id, posts[0]['date']])
+            id_last_date.append([owner_id, datetime.fromtimestamp(posts[0]['date'], tz=timezone.utc)])
             counter += WriteToDB(posts, owner_id)
 
             while len(posts) == 100:
