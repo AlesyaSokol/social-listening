@@ -3,3 +3,4 @@ venv
 database/test_data
 myvenv
 database/__pycache__
+database/.ipynb_checkpoints
