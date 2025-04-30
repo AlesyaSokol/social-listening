@@ -27,7 +27,7 @@ class Database:
         )
         self.conn.autocommit = True 
         self.cur = self.conn.cursor()
-        self.client_qdr = QdrantClient(url=QDRANT_ADDRESS, timeout=60)
+        self.client_qdr = QdrantClient(url=self.QDRANT_ADDRESS, timeout=60)
 
     def close(self):
         self.conn.close()
@@ -58,7 +58,7 @@ class Database:
         try:
             uuids = [str(uuid.uuid4()) for i in range(len(posts))]
             self.client_qdr.upsert(
-                        collection_name=QDRANT_COLLECTION,
+                        collection_name=self.QDRANT_COLLECTION,
                         points=models.Batch(
                             ids=uuids, payloads=posts, vectors=embeddings
                         ))
