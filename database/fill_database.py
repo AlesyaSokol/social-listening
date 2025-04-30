@@ -4,6 +4,7 @@ import dotenv
 from qdrant_client import QdrantClient
 from qdrant_client import models
 import uuid
+import traceback
 
 dotenv.load_dotenv('../.env')
 
@@ -72,6 +73,7 @@ class Database:
             self.conn.commit()
         except Exception as e:
             print(e)
+            traceback.print_exc()
             self.conn.rollback()
 
     def add_embeddings(self, embeddings):
