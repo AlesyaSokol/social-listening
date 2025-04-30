@@ -48,8 +48,7 @@ def truncate_texts(texts, max_tokens=8000, model="text-embedding-3-small"):
     return truncated_texts
 
 # Получение постов с фильтрацией по дате
-def GetPosts(owner_id, offset, token, last_date):
-    last_date_obj = datetime.strptime(last_date, '%Y-%m-%d')
+def GetPosts(owner_id, offset, token, last_date_obj):
     try:
         url = f'https://api.vk.com/method/wall.get?owner_id={owner_id}&count=100&offset={offset}&access_token={token}&v=5.103'
         response_owner = requests.get(url, timeout=5)
