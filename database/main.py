@@ -89,7 +89,7 @@ def WriteToDB(data, owner_id):
                 data_to_write.append([v for v in res.values()])
 
     count += len(data_to_write)
-    embeddings = get_embeddings([d['post_text'] for d in data_to_write])
+    embeddings = get_embedding([d['post_text'] for d in data_to_write])
 
     db.add_posts(data_to_write, embeddings)
 
