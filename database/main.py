@@ -86,7 +86,7 @@ def WriteToDB(data, owner_id):
                 'comments': item.get('comments', {}).get('count', 0)
             }
             if res['post_text']:
-                data_to_write.append([v for v in res.values()])
+                data_to_write.append(res)
 
     count += len(data_to_write)
     embeddings = get_embedding([d['post_text'] for d in data_to_write])
