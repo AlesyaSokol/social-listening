@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS publics (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    region_id INT
-    region_name VARCHAR(255)
-    city_id INT
+    region_id INT,
+    region_name VARCHAR(255),
+    city_id INT,
     city_name VARCHAR(255)
 );
 
