@@ -27,12 +27,13 @@ def get_embedding(texts, model="text-embedding-3-small"):
     texts = [t if len(t) > 0 else "none" for t in texts]
 
     embeddings = []
-    client = OpenAI(api_key=OPENAI_APIKEY)
-    data = client.embeddings.create(input=texts, model=model).data
-    embeddings = [data[i].embedding for i in range(len(data))]
+    if texts:
+        client = OpenAI(api_key=OPENAI_APIKEY)
+        data = client.embeddings.create(input=texts, model=model).data
+        embeddings = [data[i].embedding for i in range(len(data))]
 
-    for i, e in enumerate(embeddings):
-        embeddings[i] = [np.round(e1, 8) for e1 in e]
+        for i, e in enumerate(embeddings):
+            embeddings[i] = [np.round(e1, 8) for e1 in e]
 
     return embeddings
 
