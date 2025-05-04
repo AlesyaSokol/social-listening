@@ -46,10 +46,10 @@ class Database:
             print(e)
             self.conn.rollback()
 
-    def add_public(self, p_id, name, region):
-        sql = """INSERT INTO publics (id, name, region) VALUES (%s, %s, %s)"""
+    def add_public(self, p_id, name, region_id, region_name, city_id, city_name):
+        sql = """INSERT INTO publics (id, name, region_id, region_name, city_id, city_name) VALUES (%s, %s, %s, %s, %s, %s)"""
         try:
-            self.cur.execute(sql, (p_id, name, region))
+            self.cur.execute(sql, (p_id, name, region_id, region_name, city_id, city_name))
             self.conn.commit()
         except Exception as e:
             print(e)
@@ -105,6 +105,20 @@ def fill_regions():
 
     for i, region in enumerate(list(set(df['region']))):
         db.add_region(i, region)
+
+    db.close()
+
+
+def fill_publics():
+    import pandas as pd
+
+    db = Database()
+    df = pd.read_csv('test_data/publics.csv')
+
+    for i in len(df):
+        db.add_public(df['OwnerID'].iloc[i], df['PublicName'].iloc[i], 
+                      df['RegionID'].iloc[i], df['RegionName'].iloc[i],
+                      df['CityID'].iloc[i], df['CityName'].iloc[i])
 
     db.close()
 

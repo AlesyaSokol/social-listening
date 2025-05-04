@@ -1,12 +1,10 @@
-CREATE TABLE IF NOT EXISTS regions (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS publics (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    region_id INT REFERENCES regions(id) ON DELETE SET NULL
+    region_id INT
+    region_name VARCHAR(255)
+    city_id INT
+    city_name VARCHAR(255)
 );
 
 CREATE EXTENSION IF NOT EXISTS vector;
