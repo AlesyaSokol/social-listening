@@ -114,6 +114,8 @@ def fill_publics():
 
     db = Database()
     df = pd.read_csv('test_data/publics.csv')
+    df['RegionID'] = df['col'].fillna(0).astype(int)
+    df['CityID'] = df['col'].fillna(0).astype(int)
 
     for i in range(len(df)):
         db.add_public(str(df['OwnerID'].iloc[i]), df['PublicName'].iloc[i], 
