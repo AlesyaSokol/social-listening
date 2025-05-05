@@ -22,20 +22,42 @@ TOKEN_1 = os.getenv('TOKEN_1')
 TOKEN_2 = os.getenv('TOKEN_2')  
 
 # Функция для получения эмбеддингов
-def get_embedding(texts, model="text-embedding-3-small"):
+def get_embedding(texts, model="text-embedding-3-small", max_tokens=8000):
+    tokenizer = tiktoken.encoding_for_model(model)
+
     texts = [text.replace("\n", " ").strip() for text in texts]
     texts = [t if len(t) > 0 else "none" for t in texts]
 
-    embeddings = []
-    if texts:
-        client = OpenAI(api_key=OPENAI_APIKEY)
-        data = client.embeddings.create(input=texts, model=model).data
-        embeddings = [data[i].embedding for i in range(len(data))]
+    batches = []
+    current_batch = []
+    current_tokens = 0
+    for text in texts:
+        token_count = len(tokenizer.encode(text))
+        if token_count > max_tokens:
+            text = tokenizer.decode(tokenizer.encode(text)[:max_tokens])
+            token_count = max_tokens
+        if current_tokens + token_count > max_tokens:
+            batches.append(current_batch)
+            current_batch = [text]
+            current_tokens = token_count
+        else:
+            current_batch.append(text)
+            current_tokens += token_count
+    if current_batch:
+        batches.append(current_batch)
 
-        for i, e in enumerate(embeddings):
-            embeddings[i] = [np.round(e1, 8) for e1 in e]
+    all_embeddings = []
+    if batches:
+        for batch in batches:
+            client = OpenAI(api_key=OPENAI_APIKEY)
+            data = client.embeddings.create(input=batch, model=model).data
+            embeddings = [data[i].embedding for i in range(len(data))]
 
-    return embeddings
+            for i, e in enumerate(embeddings):
+                embeddings[i] = [np.round(e1, 8) for e1 in e]
+            all_embeddings.extend(embeddings)
+
+    return all_embeddings
 
 # Функция для обрезки текста до лимита токенов
 def truncate_texts(texts, max_tokens=8000, model="text-embedding-3-small"):
