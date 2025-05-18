@@ -4,6 +4,10 @@ from matplotlib import pyplot as plt
 import copy
 import pickle
 import random
+from datetime import datetime, timedelta
+from qdrant_client import QdrantClient, models
+import os
+import dotenv
 
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
@@ -12,8 +16,64 @@ import time
 import copy
 import datetime
 
-import os
+print("Current working directory:", os.getcwd())
+print("Loading .env from:", os.path.abspath('.env'))
+dotenv.load_dotenv('.env')
+print("Environment variables loaded")
+print("OPENAI_APIKEY:", os.getenv("OPENAI_APIKEY"))
+print("QDRANT_ADDRESS:", os.getenv("QDRANT_ADDRESS"))
+print("QDRANT_COLLECTION:", os.getenv("QDRANT_COLLECTION"))
 
+def get_posts_from_qdrant(start_date, end_date):
+    """
+    Получает посты из Qdrant за указанный период
+    
+    Args:
+        start_date (datetime): начальная дата
+        end_date (datetime): конечная дата
+    
+    Returns:
+        pd.DataFrame: DataFrame с постами и их эмбеддингами
+    """
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    
+    # Формируем запрос к Qdrant с фильтром по датам
+    response = client.scroll(
+        collection_name=os.getenv('QDRANT_COLLECTION'),
+        scroll_filter=models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="post_date",
+                    range=models.Range(
+                        gte=start_date.isoformat(),
+                        lte=end_date.isoformat()
+                    )
+                )
+            ]
+        ),
+        with_payload=True,
+        with_vectors=True
+    )
+    
+    # Преобразуем результаты в DataFrame
+    posts = []
+    embeddings = []
+    
+    for point in response[0]:
+        posts.append({
+            'public_id': point.payload['public_id'],
+            'post_text': point.payload['post_text'],
+            'post_date': datetime.fromisoformat(point.payload['post_date']),
+            'post_id': point.payload['post_id'],
+            'views': point.payload['views'],
+            'reposts': point.payload['reposts'],
+            'likes': point.payload['likes'],
+            'comments': point.payload['comments']
+        })
+        embeddings.append(point.vector)
+    
+    df = pd.DataFrame(posts)
+    return df, embeddings
 
 # MAIN FUNCTION FOR CLUSTERING
 
@@ -38,8 +98,8 @@ def cluster_all_posts(df, dates, embeddings):
     
         av_embeddings_date = []
         
-        df_date = df[df['PostDate']==d]
-        embeddings_date = np.array(list(df_date['PostTextEmbedding']))
+        df_date = df[df['post_date']==d]
+        embeddings_date = np.array(list(df_date['post_text']))
         
         agglo = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, metric='cosine', linkage="average")
         labels = agglo.fit_predict(embeddings_date)
@@ -79,7 +139,7 @@ def cluster_all_posts(df, dates, embeddings):
                     for j in df_date[df_date['label']==i].index:
                         ind_label_df[j]=ind
                     # print(j, i,ind)
-                    embs_cluster = [e for j,e in enumerate(df['PostTextEmbedding']) if ind_label_df[j]==ind]
+                    embs_cluster = [e for j,e in enumerate(embeddings) if ind_label_df[j]==ind]
                     clusters_dict[ind] = np.mean(embs_cluster, axis = 0)
                 else:
                     print(i)
@@ -105,12 +165,12 @@ def events_time_series(df, dates):
         l = []
         df_event = df[df['cluster']==e]
         for d in dates:
-            l.append(len(df_event[df_event['date']==d]))
+            l.append(len(df_event[df_event['post_date']==d]))
         post_events[e] = l
     
     l = []
     for d in dates:
-        l.append(len(df[df['date']==d]))
+        l.append(len(df[df['post_date']==d]))
         post_events['total'] = l
 
     return post_events
@@ -270,7 +330,7 @@ def find_bursts(post_events, dates, e):
 
 from openai import OpenAI
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_APIKEY")
 client_openai = OpenAI(api_key = OPENAI_API_KEY)
 
 def ask_gpt(prompt, posts, model = 'gpt-4o-mini'):
@@ -290,21 +350,20 @@ prompt = "You're a newsroom helper. Summarize the posts in one caption (less tha
 
 
 def extract_news(post_events, dates, e):
-
-    weighted_bursts = find_bursts(e)
+    weighted_bursts = find_bursts(post_events, dates, e)
 
     rows = []
     for i,item in weighted_bursts.iterrows():
         if item['weight']>12:
             row = {}
-            df_posts = df[(df['PostDate']==dates[item['begin']])&(df['cluster']==e)]
+            df_posts = df[(df['post_date']==dates[item['begin']])&(df['cluster']==e)]
             if len(df_posts)>5:
                 links = []
                 for j,item1 in df_posts.iterrows():
-                    link = 'https://vk.com/wall'+str(item1['OwnerID'])+'_'+str(item1['PostDate'])
+                    link = 'https://vk.com/wall'+str(item1['public_id'])+'_'+str(item1['post_date'])
                     links.append(link)
                 row['links'] = links
-                row['post_texts'] = list(df_posts['PostText'])
+                row['post_texts'] = list(df_posts['post_text'])
                 row['regions'] = list(df_posts['region'])
                 row['n_posts'] = len(df_posts)
                 row['topic_gpt'] = ask_gpt(prompt, random.sample(row['post_texts'],min(20,len(row['post_texts']))))
@@ -316,17 +375,80 @@ def extract_news(post_events, dates, e):
 
 
 df = pd.read_csv('posts_embeddings.csv')
-df = df.drop_duplicates(subset = 'PostText')
-df['PostTextEmbedding'] = [[float(e1) for e1 in e[1:-1].split(', ')] for e in df['PostTextEmbedding']]
-df = df[[len(str(t).split())>5 for t in df['PostText']]]
-dates = sorted(set(df['PostDate']))
+df = df.drop_duplicates(subset = 'post_text')
+df['post_text'] = [[float(e1) for e1 in e[1:-1].split(', ')] for e in df['post_text']]
+df = df[[len(str(t).split())>5 for t in df['post_text']]]
+dates = sorted(set(df['post_date'].dt.date))
 
 post_events = events_time_series(df, dates)
 
-embeddings = np.array(list(df['PostTextEmbedding']))
+embeddings = np.array(list(df['post_text']))
 
 rows = []
 for i,e in enumerate(sorted(list(set(df['cluster'])))[1:]):
     print(i)
     rows += extract_news(post_events, dates, e)
+
+def analyze_trends_for_period(start_date, end_date):
+    """
+    Анализирует тренды за указанный период
+    
+    Args:
+        start_date (datetime): начальная дата
+        end_date (datetime): конечная дата
+    
+    Returns:
+        dict: Словарь с трендами и их характеристиками
+    """
+    # Получаем данные из Qdrant
+    df, embeddings = get_posts_from_qdrant(start_date, end_date)
+    
+    if len(df) == 0:
+        return {"error": "No posts found for the specified period"}
+    
+    # Получаем уникальные даты для анализа
+    dates = sorted(df['post_date'].dt.date.unique())
+    
+    # Кластеризуем посты
+    df_clustered = cluster_all_posts(df, dates, embeddings)
+    
+    # Получаем временные ряды для каждого события
+    events = events_time_series(df_clustered, dates)
+    
+    # Анализируем всплески для каждого кластера
+    trends = {}
+    for event_id in events:
+        if event_id != 'total':
+            bursts = find_bursts(events, dates, event_id)
+            if len(bursts) > 0:
+                # Получаем тексты постов для этого тренда
+                trend_posts = df_clustered[df_clustered['cluster'] == event_id]['post_text'].tolist()
+                trends[event_id] = {
+                    'bursts': bursts,
+                    'posts': trend_posts[:5],  # Берем первые 5 постов как пример
+                    'total_posts': len(trend_posts)
+                }
+    
+    return trends
+
+def analyze_from_csv():
+    """Анализ трендов из CSV файла (старая версия)"""
+    df = pd.read_csv('posts_embeddings.csv')
+    df = df.drop_duplicates(subset = 'post_text')
+    df['post_text'] = [[float(e1) for e1 in e[1:-1].split(', ')] for e in df['post_text']]
+    df = df[[len(str(t).split())>5 for t in df['post_text']]]
+    dates = sorted(set(df['post_date'].dt.date))
+
+    post_events = events_time_series(df, dates)
+    embeddings = np.array(list(df['post_text']))
+
+    rows = []
+    for i,e in enumerate(sorted(list(set(df['cluster'])))[1:]):
+        print(i)
+        rows += extract_news(post_events, dates, e)
+    return rows
+
+if __name__ == "__main__":
+    # Этот код будет выполняться только при прямом запуске файла
+    analyze_from_csv()
 
