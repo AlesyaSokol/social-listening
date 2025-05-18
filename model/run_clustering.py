@@ -1,6 +1,6 @@
 import dotenv
 from datetime import datetime, timedelta
-from model.model_new import cluster_all_posts
+from model_new import cluster_all_posts
 
 # Load environment variables
 dotenv.load_dotenv()
