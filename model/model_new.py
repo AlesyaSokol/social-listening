@@ -19,6 +19,7 @@ from sklearn.cluster import AgglomerativeClustering
 
 import time
 import copy
+from collections import defaultdict
 
 print("Current working directory:", os.getcwd())
 print("Loading .env from:", os.path.abspath('.env'))
@@ -176,12 +177,12 @@ def update_qdrant_cluster_labels(post_labels):
             logging.error(f"Error updating cluster {cluster_id}: {str(e)}")
             continue
 
-def cluster_all_posts(dates, batch_size=50000):
+def cluster_all_posts(target_date, batch_size=10000):
     """
-    Кластеризация постов по датам и батчам
+    Кластеризация постов для одного дня с использованием результатов кластеризации за прошлую неделю
     
     Args:
-        dates (list): список дат для анализа
+        target_date (datetime): дата для анализа
         batch_size (int): размер батча для кластеризации
     
     Returns:
@@ -189,164 +190,185 @@ def cluster_all_posts(dates, batch_size=50000):
         где all_post_labels это словарь {(post_id, public_id): cluster_id}
     """
     start_time = time.time()
-    logging.warning(f"Starting clustering process with batch size: {batch_size}")
+    logging.warning(f"Starting clustering process for date: {target_date.date()}")
+    
+    # Получаем даты за прошлую неделю
+    past_week_dates = []
+    for i in range(7):
+        past_date = target_date - timedelta(days=i+1)
+        past_week_dates.append(past_date)
+    past_week_dates = sorted(past_week_dates)
+    
+    # Получаем существующие кластеры за прошлую неделю
+    clusters_dict = {}
+    cluster_daily_counts = {}
+    
+    # Получаем посты и кластеры за прошлую неделю
+    for past_date in past_week_dates:
+        # Получаем посты за день
+        df_past, embeddings_past, _ = get_posts_for_day(past_date, limit=None)
+        
+        if len(df_past) > 0:
+            # Получаем существующие кластеры для этих постов
+            for _, row in df_past.iterrows():
+                if row.get('cluster_id', -1) != -1:
+                    cluster_id = row['cluster_id']
+                    if cluster_id not in clusters_dict:
+                        # Получаем эмбеддинги для этого кластера
+                        cluster_posts = df_past[df_past['cluster_id'] == cluster_id]
+                        cluster_embs = [embeddings_past[i] for i in cluster_posts.index]
+                        if cluster_embs:
+                            clusters_dict[cluster_id] = np.mean(cluster_embs, axis=0)
+                            
+                            # Инициализируем счетчик
+                            if cluster_id not in cluster_daily_counts:
+                                cluster_daily_counts[cluster_id] = {}
+                            cluster_daily_counts[cluster_id][past_date] = len(cluster_posts)
     
     # Инициализируем DataFrame для текущего дня
     current_df = pd.DataFrame()
     
-    # Словарь для хранения количества постов в кластерах по дням
-    cluster_daily_counts = {}
-    
     # Словарь для хранения меток всех постов
     all_post_labels = {}
     
-    last_cl = 0
+    last_cl = max(clusters_dict.keys()) + 1 if clusters_dict else 0
     av_embeddings = []
     av_embeddings_date = []
     
-    clusters_dict = {}  # Хранит центроиды кластеров
+    # Получаем посты батчами для текущего дня
+    last_post_date = None
+    batch_number = 1
+    has_more_posts = True
+    total_posts_for_day = 0
     
-    for d in dates:
-        day_start = time.time()
-        logging.warning(f"\nProcessing date: {d.date()}")
+    while has_more_posts:
+        batch_time = time.time()
+        logging.warning(f"\nProcessing batch {batch_number} for {target_date.date()}")
+        logging.warning(f"Total posts processed so far for this day: {total_posts_for_day}")
         
-        # Получаем посты батчами
-        last_post_date = None
-        batch_number = 1
-        has_more_posts = True
-        batch_post_labels = {}  # Словарь для хранения меток текущего батча
-        total_posts_for_day = 0
+        # Получаем следующий батч постов
+        df_batch, embeddings_batch, last_post_date = get_posts_for_day(target_date, limit=batch_size, last_post_date=last_post_date)
         
-        while has_more_posts:
-            batch_time = time.time()
-            logging.warning(f"\nProcessing batch {batch_number} for {d.date()}")
-            logging.warning(f"Total posts processed so far for this day: {total_posts_for_day}")
+        if len(df_batch) == 0:
+            logging.warning("Got empty batch, stopping pagination")
+            break
             
-            # Получаем следующий батч постов
-            df_batch, embeddings_batch, last_post_date = get_posts_for_day(d, limit=batch_size, last_post_date=last_post_date)
+        total_posts_for_day += len(df_batch)
+        logging.warning(f"Got batch of {len(df_batch)} posts")
+        logging.warning(f"Updated total posts for day: {total_posts_for_day}")
+        
+        # Очищаем av_embeddings_date для нового батча
+        if len(av_embeddings_date) > 0:
+            av_embeddings.extend(av_embeddings_date)
+        av_embeddings_date = []
+        
+        # Кластеризуем текущий батч
+        cluster_start = time.time()
+        agglo = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, metric='cosine', linkage="average")
+        labels = agglo.fit_predict(embeddings_batch)
+        logging.warning(f"Agglomerative clustering completed - Took {time.time() - cluster_start:.2f} seconds")
+        
+        # Фильтруем кластеры по размеру
+        filter_start = time.time()
+        clusters = []
+        for l in set(labels):
+            if len(np.nonzero(labels==l)[0]) > 3:
+                if l not in clusters:
+                    clusters.append(l)
+        
+        cl_dict = {c: i for i, c in enumerate(clusters)}
+        labels1 = [cl_dict[l] if l in clusters else -1 for l in labels]
+        logging.warning(f"Found {len(clusters)} clusters with >3 posts - Took {time.time() - filter_start:.2f} seconds")
+        
+        # Вычисляем центроиды для каждого кластера в батче
+        centroid_start = time.time()
+        for i in range(len(clusters)):
+            embs_cluster = [embeddings_batch[j] for j,label in enumerate(labels1) if label==i]
+            av_embeddings_date.append(np.mean(embs_cluster, axis=0))
+        logging.warning(f"Calculated cluster centroids - Took {time.time() - centroid_start:.2f} seconds")
+        
+        df_batch['label'] = labels1
+        df_batch['cluster'] = -1
+        
+        # Сравниваем с существующими кластерами
+        compare_start = time.time()
+        if len(clusters_dict) > 0:
+            keys = list(clusters_dict.keys())
+            av_embeddings = [clusters_dict[k] for k in keys]
+            similarity_matrix = cosine_similarity(np.array(av_embeddings_date), np.array(av_embeddings))
             
-            if len(df_batch) == 0:
-                logging.warning("Got empty batch, stopping pagination")
-                break
+            for i in range(len(av_embeddings_date)):
+                sim_emb = similarity_matrix[i]
+                ind_sim = np.argmax(sim_emb)
+                ind = keys[ind_sim]
                 
-            total_posts_for_day += len(df_batch)
-            logging.warning(f"Got batch of {len(df_batch)} posts")
-            logging.warning(f"Updated total posts for day: {total_posts_for_day}")
-            
-            # Очищаем av_embeddings_date для нового батча
-            if len(av_embeddings_date) > 0:
-                av_embeddings.extend(av_embeddings_date)
-            av_embeddings_date = []
-            
-            # Кластеризуем текущий батч
-            cluster_start = time.time()
-            agglo = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, metric='cosine', linkage="average")
-            labels = agglo.fit_predict(embeddings_batch)
-            logging.warning(f"Agglomerative clustering completed - Took {time.time() - cluster_start:.2f} seconds")
-            
-            # Фильтруем кластеры по размеру
-            filter_start = time.time()
-            clusters = []
-            for l in set(labels):
-                if len(np.nonzero(labels==l)[0]) > 3:
-                    if l not in clusters:
-                        clusters.append(l)
-            
-            cl_dict = {c: i for i, c in enumerate(clusters)}
-            labels1 = [cl_dict[l] if l in clusters else -1 for l in labels]
-            logging.warning(f"Found {len(clusters)} clusters with >3 posts - Took {time.time() - filter_start:.2f} seconds")
-            
-            # Вычисляем центроиды для каждого кластера в батче
-            centroid_start = time.time()
-            for i in range(len(clusters)):
-                embs_cluster = [embeddings_batch[j] for j,label in enumerate(labels1) if label==i]
-                av_embeddings_date.append(np.mean(embs_cluster, axis=0))
-            logging.warning(f"Calculated cluster centroids - Took {time.time() - centroid_start:.2f} seconds")
-            
-            df_batch['label'] = labels1
-            df_batch['cluster'] = -1
-            
-            # Сравниваем с существующими кластерами
-            compare_start = time.time()
-            if len(clusters_dict) > 0:
-                keys = list(clusters_dict.keys())
-                av_embeddings = [clusters_dict[k] for k in keys]
-                similarity_matrix = cosine_similarity(np.array(av_embeddings_date), np.array(av_embeddings))
-                
-                for i in range(len(av_embeddings_date)):
-                    sim_emb = similarity_matrix[i]
-                    ind_sim = np.argmax(sim_emb)
-                    ind = keys[ind_sim]
+                if sim_emb[ind_sim] > 0.6:
+                    # Присваиваем существующий кластер
+                    df_batch.loc[df_batch['label']==i, 'cluster'] = ind
+                    # Обновляем центроид кластера
+                    cluster_posts = df_batch[df_batch['label']==i]
+                    cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
+                    clusters_dict[ind] = np.mean([clusters_dict[ind]] + cluster_embs, axis=0)
                     
-                    if sim_emb[ind_sim] > 0.6:
-                        # Присваиваем существующий кластер
-                        df_batch.loc[df_batch['label']==i, 'cluster'] = ind
-                        # Обновляем центроид кластера
-                        cluster_posts = df_batch[df_batch['label']==i]
-                        cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
-                        clusters_dict[ind] = np.mean([clusters_dict[ind]] + cluster_embs, axis=0)
-                        
-                        # Обновляем количество постов
-                        if ind not in cluster_daily_counts:
-                            cluster_daily_counts[ind] = {date: 0 for date in dates}
-                        cluster_daily_counts[ind][d] = cluster_daily_counts[ind].get(d, 0) + len(cluster_posts)
-                    else:
-                        # Создаем новый кластер
-                        new_cluster_id = i + last_cl
-                        df_batch.loc[df_batch['label']==i, 'cluster'] = new_cluster_id
-                        clusters_dict[new_cluster_id] = av_embeddings_date[i]
-                        
-                        # Инициализируем счетчик
-                        cluster_daily_counts[new_cluster_id] = {date: 0 for date in dates}
-                        cluster_daily_counts[new_cluster_id][d] = len(df_batch[df_batch['label']==i])
-            else:
-                # Для первого батча создаем новые кластеры
-                for i, c in enumerate(clusters):
-                    cluster_id = i + last_cl
-                    df_batch.loc[df_batch['label']==i, 'cluster'] = cluster_id
-                    clusters_dict[cluster_id] = av_embeddings_date[i]
+                    # Обновляем количество постов
+                    if ind not in cluster_daily_counts:
+                        cluster_daily_counts[ind] = {}
+                    cluster_daily_counts[ind][target_date] = cluster_daily_counts[ind].get(target_date, 0) + len(cluster_posts)
+                else:
+                    # Создаем новый кластер
+                    new_cluster_id = i + last_cl
+                    df_batch.loc[df_batch['label']==i, 'cluster'] = new_cluster_id
+                    clusters_dict[new_cluster_id] = av_embeddings_date[i]
                     
                     # Инициализируем счетчик
-                    cluster_daily_counts[cluster_id] = {date: 0 for date in dates}
-                    cluster_daily_counts[cluster_id][d] = len(df_batch[df_batch['label']==i])
-            
-            logging.warning(f"Compared with existing clusters - Took {time.time() - compare_start:.2f} seconds")
-            
-            # Обновляем last_cl
-            if len(df_batch[df_batch['cluster'] != -1]) > 0:
-                last_cl = max(df_batch['cluster'].max() + 1, last_cl)
-            
-            # Сохраняем метки кластеров для текущего батча
-            batch_post_labels = {}
-            for _, row in df_batch.iterrows():
-                if row['cluster'] != -1:
-                    batch_post_labels[(row['post_id'], row['public_id'])] = row['cluster']
-                    all_post_labels[(row['post_id'], row['public_id'])] = row['cluster']
-            
-            # Обновляем метки в Qdrant для текущего батча
-            if batch_post_labels:
-                update_start = time.time()
-                logging.warning("\nUpdating cluster labels in Qdrant for current batch...")
-                update_qdrant_cluster_labels(batch_post_labels)
-                logging.warning(f"Finished updating cluster labels for batch - Took {time.time() - update_start:.2f} seconds")
-            
-            # Обновляем current_df для последнего батча последнего дня
-            if d == dates[-1]:
-                current_df = df_batch.copy()
-            
-            # Подготовка к следующему батчу
-            has_more_posts = len(df_batch) == batch_size and last_post_date is not None
-            if not has_more_posts:
-                logging.warning(f"Stopping pagination because: batch size condition: {len(df_batch) == batch_size}, last_post_date condition: {last_post_date is not None}")
-            
-            batch_number += 1
-            
-            # Очищаем память
-            del embeddings_batch
-            logging.warning(f"Batch processing completed - Took {time.time() - batch_time:.2f} seconds")
+                    if new_cluster_id not in cluster_daily_counts:
+                        cluster_daily_counts[new_cluster_id] = {}
+                    cluster_daily_counts[new_cluster_id][target_date] = len(df_batch[df_batch['label']==i])
+        else:
+            # Для первого батча создаем новые кластеры
+            for i, c in enumerate(clusters):
+                cluster_id = i + last_cl
+                df_batch.loc[df_batch['label']==i, 'cluster'] = cluster_id
+                clusters_dict[cluster_id] = av_embeddings_date[i]
+                
+                # Инициализируем счетчик
+                if cluster_id not in cluster_daily_counts:
+                    cluster_daily_counts[cluster_id] = {}
+                cluster_daily_counts[cluster_id][target_date] = len(df_batch[df_batch['label']==i])
         
-        logging.warning(f"Day processing completed - Total posts processed: {total_posts_for_day}")
-        logging.warning(f"Day processing took {time.time() - day_start:.2f} seconds")
+        logging.warning(f"Compared with existing clusters - Took {time.time() - compare_start:.2f} seconds")
+        
+        # Обновляем last_cl
+        if len(df_batch[df_batch['cluster'] != -1]) > 0:
+            last_cl = max(df_batch['cluster'].max() + 1, last_cl)
+        
+        # Сохраняем метки кластеров для текущего батча
+        batch_post_labels = {}
+        for _, row in df_batch.iterrows():
+            if row['cluster'] != -1:
+                batch_post_labels[(row['post_id'], row['public_id'])] = row['cluster']
+                all_post_labels[(row['post_id'], row['public_id'])] = row['cluster']
+        
+        # Обновляем метки в Qdrant для текущего батча
+        if batch_post_labels:
+            update_start = time.time()
+            logging.warning("\nUpdating cluster labels in Qdrant for current batch...")
+            update_qdrant_cluster_labels(batch_post_labels)
+            logging.warning(f"Finished updating cluster labels for batch - Took {time.time() - update_start:.2f} seconds")
+        
+        # Обновляем current_df для последнего батча
+        current_df = df_batch.copy()
+        
+        # Подготовка к следующему батчу
+        has_more_posts = len(df_batch) == batch_size and last_post_date is not None
+        if not has_more_posts:
+            logging.warning(f"Stopping pagination because: batch size condition: {len(df_batch) == batch_size}, last_post_date condition: {last_post_date is not None}")
+        
+        batch_number += 1
+        
+        # Очищаем память
+        del embeddings_batch
+        logging.warning(f"Batch processing completed - Took {time.time() - batch_time:.2f} seconds")
     
     total_time = time.time() - start_time
     logging.warning(f"\nTotal clustering process completed - Took {total_time:.2f} seconds")
@@ -480,7 +502,7 @@ def analyze_trends_for_period(start_date, end_date):
     dates = sorted(dates)
     
     # Кластеризуем посты, получая их день за днем
-    df_last_day, cluster_counts, all_post_labels = cluster_all_posts(dates)
+    df_last_day, cluster_counts, all_post_labels = cluster_all_posts(dates[-1])
     
     if len(df_last_day) == 0:
         return {"error": "No posts found for the specified period"}
@@ -506,3 +528,146 @@ def analyze_trends_for_period(start_date, end_date):
     trends['post_labels'] = all_post_labels
     
     return trends 
+
+def ensure_centroids_collection():
+    """
+    Ensures that the centroids collection exists in Qdrant.
+    Creates it if it doesn't exist.
+    """
+    qdrant_client = QdrantClient(
+        url=os.getenv("QDRANT_ADDRESS"),
+        api_key=os.getenv("QDRANT_API_KEY", None)
+    )
+    
+    collection_name = "cluster_centroids"
+    
+    # Check if collection exists
+    collections = qdrant_client.get_collections().collections
+    collection_names = [collection.name for collection in collections]
+    
+    if collection_name not in collection_names:
+        logging.warning(f"Creating new collection: {collection_name}")
+        qdrant_client.create_collection(
+            collection_name=collection_name,
+            vectors_config=models.VectorParams(
+                size=1536,  # OpenAI embedding size
+                distance=models.Distance.COSINE
+            )
+        )
+        logging.warning(f"Collection {collection_name} created successfully")
+    else:
+        logging.warning(f"Collection {collection_name} already exists")
+
+def calculate_cluster_centroids(start_date, end_date, cluster_ids):
+    """
+    Calculate centroids for specified clusters within a date range and save them to Qdrant.
+    
+    Args:
+        start_date (datetime): Start date for the period
+        end_date (datetime): End date for the period
+        cluster_ids (list): List of cluster IDs to process
+    
+    Returns:
+        dict: Dictionary with cluster centroids in format {cluster_id: {'vector': centroid_vector, 'count': post_count}}
+    """
+    logging.warning(f"Calculating cluster centroids for period {start_date.date()} to {end_date.date()}")
+    logging.warning(f"Processing {len(cluster_ids)} clusters")
+    
+    # Ensure centroids collection exists
+    ensure_centroids_collection()
+    
+    # Initialize Qdrant client
+    qdrant_client = QdrantClient(
+        url=os.getenv("QDRANT_ADDRESS"),
+        api_key=os.getenv("QDRANT_API_KEY", None)
+    )
+    
+    # Dictionary to store cluster centroids
+    cluster_centroids = {}
+    
+    # Process each cluster separately
+    for cluster_id in cluster_ids:
+        logging.warning(f"Processing cluster {cluster_id}")
+        
+        # Get all posts for this cluster in the date range using batching
+        all_vectors = []
+        offset_id = None
+        batch_size = 1000
+        
+        while True:
+            # Get next batch of points
+            points = qdrant_client.scroll(
+                collection_name=os.getenv("QDRANT_COLLECTION"),
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="post_date",
+                            range=models.DatetimeRange(
+                                gte=start_date.isoformat(),
+                                lt=end_date.isoformat()
+                            )
+                        ),
+                        models.FieldCondition(
+                            key="cluster_id",
+                            match={"value": cluster_id}
+                        )
+                    ]
+                ),
+                limit=batch_size,
+                offset=offset_id,
+                with_payload=True,
+                with_vectors=True
+            )[0]
+            
+            if not points:
+                break
+                
+            # Add vectors from this batch
+            all_vectors.extend([point.vector for point in points])
+            
+            # Update offset_id for next batch
+            offset_id = points[-1].id
+            
+            # If we got less than batch_size points, we've reached the end
+            if len(points) < batch_size:
+                break
+        
+        if not all_vectors:
+            logging.warning(f"No posts found for cluster {cluster_id}")
+            continue
+        
+        # Calculate centroid for this cluster
+        centroid_vector = np.mean(all_vectors, axis=0)
+        
+        # Store centroid info
+        cluster_centroids[cluster_id] = {
+            'vector': centroid_vector.tolist(),
+            'count': len(all_vectors)
+        }
+        
+        # Save centroid to Qdrant
+        point_id = hash(cluster_id) % (2**63 - 1)  # Ensure positive 64-bit integer
+        
+        payload = {
+            "cluster_id": cluster_id,
+            "post_count": len(all_vectors),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "last_updated": datetime.now().isoformat()
+        }
+        
+        qdrant_client.upsert(
+            collection_name="cluster_centroids",
+            points=[
+                models.PointStruct(
+                    id=point_id,
+                    vector=centroid_vector.tolist(),
+                    payload=payload
+                )
+            ]
+        )
+        
+        logging.warning(f"Processed cluster {cluster_id}: {len(all_vectors)} posts")
+    
+    logging.warning(f"Finished processing {len(cluster_centroids)} clusters")
+    return cluster_centroids 

@@ -1,7 +1,7 @@
 from datetime import datetime
 import dotenv
 import os
-from model.model_new import cluster_all_posts
+from model_new import cluster_all_posts
 import logging
 import sys
 import time
@@ -28,8 +28,7 @@ def test_single_day_clustering():
     total_start = time.time()
     
     # Set test date
-    test_date = datetime(2025, 5, 12)
-    dates = [test_date]
+    test_date = datetime(2025, 5, 18)
     logging.warning(f"Testing clustering for single day: {test_date.date()}")
     
     try:
@@ -37,7 +36,7 @@ def test_single_day_clustering():
         logging.warning("\nStarting clustering process...")
         cluster_start = time.time()
         
-        df_last_day, cluster_counts, all_post_labels = cluster_all_posts(dates, batch_size=10000)
+        df_last_day, cluster_counts, all_post_labels = cluster_all_posts(test_date, batch_size=10000)
         current_time = log_time(cluster_start, "Clustering completed")
         
         # Print detailed results

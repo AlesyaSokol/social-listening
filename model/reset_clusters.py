@@ -16,7 +16,7 @@ def reset_all_cluster_ids():
     Reset cluster_id to -1 for all posts in Qdrant
     """
     try:
-        target_date = datetime(2025, 5, 12)
+        target_date = datetime(2025, 5, 18)
 
         # Initialize Qdrant client
         client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=30.0)
