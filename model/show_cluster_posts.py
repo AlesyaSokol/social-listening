@@ -56,7 +56,7 @@ def get_posts_from_cluster(cluster_id):
 
 if __name__ == "__main__":
     # Get posts from cluster
-    cluster_id = 42
+    cluster_id = 2816
     df = get_posts_from_cluster(cluster_id)
     
     if not df.empty:

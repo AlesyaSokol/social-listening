@@ -103,9 +103,16 @@ def get_clusters_by_date_range(target_date):
                     range=models.DatetimeRange(
                         lt=end_date_iso
                     )
-                )
+                ),
+                # models.FieldCondition(
+                #     key="post_count",
+                #     range=models.Range(
+                #         lt=50
+                #     )
+                # )
             ]
         ),
+        limit = 100,
         with_payload=["cluster_id", "start_date", "end_date", "post_count"],
         with_vectors=False
     )[0]
@@ -121,7 +128,7 @@ def get_clusters_by_date_range(target_date):
 
 if __name__ == "__main__":
     # Set test date
-    test_date = datetime(2025, 5, 18)
+    test_date = datetime(2025, 5, 13)
     # show_clusters_for_day(test_date)
     # print("\n" + "="*50 + "\n")
     get_clusters_by_date_range(test_date) 
