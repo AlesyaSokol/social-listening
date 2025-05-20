@@ -21,7 +21,7 @@ from sklearn.cluster import AgglomerativeClustering
 import time
 import copy
 from collections import defaultdict
-from .burst_detection import analyze_trends_for_period
+# from .burst_detection import analyze_trends_for_period
 
 def retry_qdrant_operation(operation_func, *args, **kwargs):
     """
