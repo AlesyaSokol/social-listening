@@ -35,14 +35,16 @@ def retry_qdrant_operation(operation_func, *args, **kwargs):
     Returns:
         The result of the operation if successful
     """
-    while True:
-        try:
-            return operation_func(*args, **kwargs)
-        except Exception as e:
-            logging.error(f"Error in Qdrant operation: {str(e)}")
-            logging.error("Retrying in 10 seconds...")
-            time.sleep(10)
-            continue
+    # Commented out retry mechanism to fail immediately on errors
+    # while True:
+    #     try:
+    #         return operation_func(*args, **kwargs)
+    #     except Exception as e:
+    #         logging.error(f"Error in Qdrant operation: {str(e)}")
+    #         logging.error("Retrying in 10 seconds...")
+    #         time.sleep(10)
+    #         continue
+    return operation_func(*args, **kwargs)
 
 print("Current working directory:", os.getcwd())
 print("Loading .env from:", os.path.abspath('.env'))
