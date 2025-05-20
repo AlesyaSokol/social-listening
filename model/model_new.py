@@ -44,7 +44,14 @@ def retry_qdrant_operation(operation_func, *args, **kwargs):
     #         logging.error("Retrying in 10 seconds...")
     #         time.sleep(10)
     #         continue
-    return operation_func(*args, **kwargs)
+    try:
+        return operation_func(*args, **kwargs)
+    except Exception as e:
+        logging.error(f"Error in Qdrant operation: {str(e)}")
+        logging.error("Full traceback:")
+        import traceback
+        traceback.print_exc()
+        raise  # Re-raise the exception to stop execution
 
 print("Current working directory:", os.getcwd())
 print("Loading .env from:", os.path.abspath('.env'))
