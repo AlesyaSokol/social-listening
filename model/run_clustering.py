@@ -27,6 +27,10 @@ def run_clustering_for_date_range(start_date, end_date):
             logging.warning(f"Successfully processed {len(df_last_day)} posts")
         except Exception as e:
             logging.error(f"Error processing date {current_date.date()}: {str(e)}")
+            logging.error("Full traceback:")
+            import traceback
+            traceback.print_exc()
+            raise  # Re-raise the exception to stop execution
         
         current_date += timedelta(days=1)
 
