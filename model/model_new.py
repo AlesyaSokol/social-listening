@@ -601,7 +601,7 @@ def cluster_all_posts(target_date, batch_size=10000):
                             must=[
                                 models.FieldCondition(
                                     key="cluster_id",
-                                    match={"value": ind}
+                                    match={"value": int(ind)}  # Convert numpy.int64 to Python int
                                 )
                             ]
                         ),
