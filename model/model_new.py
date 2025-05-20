@@ -177,6 +177,181 @@ def update_qdrant_cluster_labels(post_labels):
             logging.error(f"Error updating cluster {cluster_id}: {str(e)}")
             continue
 
+def update_cluster_centroid(cluster_id, new_vectors, target_date):
+    """
+    Update the centroid of a cluster when new vectors are added.
+    Returns the updated centroid data for batch processing.
+    
+    Args:
+        cluster_id (int): The ID of the cluster to update
+        new_vectors (list): List of new vectors to add to the cluster
+        target_date (datetime): The date of the data being processed
+    
+    Returns:
+        dict: Dictionary with centroid data for batch processing
+    """
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    
+    try:
+        # Get current centroid and post count
+        response = client.scroll(
+            collection_name="cluster_centroids",
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="cluster_id",
+                        match=models.MatchValue(value=cluster_id)
+                    )
+                ]
+            ),
+            with_payload=True,
+            with_vectors=True
+        )
+        
+        points = response[0]
+        if not points:
+            logging.warning(f"No centroid found for cluster {cluster_id}")
+            return None
+            
+        current_centroid = points[0]
+        current_vector = current_centroid.vector
+        current_count = current_centroid.payload['post_count']
+        current_start_date = current_centroid.payload['start_date']
+        
+        # Convert new vectors to numpy array for efficient computation
+        new_vectors_array = np.array(new_vectors)
+        num_new_vectors = len(new_vectors)
+        
+        # Calculate new centroid using weighted average
+        new_centroid = (np.array(current_vector) * current_count + np.sum(new_vectors_array, axis=0)) / (current_count + num_new_vectors)
+        
+        # logging.warning(f"Prepared update for cluster {cluster_id}:")
+        # logging.warning(f"  - Old post count: {current_count}")
+        # logging.warning(f"  - New posts: {num_new_vectors}")
+        # logging.warning(f"  - New total: {current_count + num_new_vectors}")
+        
+        # Return centroid data for batch processing
+        return {
+            'id': current_centroid.id,
+            'vector': new_centroid.tolist(),
+            'payload': {
+                "cluster_id": cluster_id,
+                "post_count": current_count + num_new_vectors,
+                "start_date": current_start_date,
+                "end_date": target_date.isoformat(),
+                "last_updated": target_date.isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"Error updating centroid for cluster {cluster_id}: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return None
+
+def create_cluster_centroid(cluster_id, vectors, start_date, end_date):
+    """
+    Create a new cluster centroid.
+    Returns the centroid data for batch processing.
+    
+    Args:
+        cluster_id (int): The ID of the new cluster
+        vectors (list): List of vectors to create the centroid from
+        start_date (datetime): Start date for the cluster
+        end_date (datetime): End date for the cluster
+    
+    Returns:
+        dict: Dictionary with centroid data for batch processing
+    """
+    try:
+        # Calculate centroid from vectors
+        vectors_array = np.array(vectors)
+        centroid = np.mean(vectors_array, axis=0)
+        
+        # Create point ID from cluster_id
+        point_id = hash(cluster_id) % (2**63 - 1)  # Ensure positive 64-bit integer
+        
+        # logging.warning(f"Prepared new centroid for cluster {cluster_id}:")
+        # logging.warning(f"  - Point ID: {point_id}")
+        # logging.warning(f"  - Number of posts: {len(vectors)}")
+        # logging.warning(f"  - Start date: {start_date.isoformat()}")
+        # logging.warning(f"  - End date: {end_date.isoformat()}")
+        
+        # Return centroid data for batch processing
+        return {
+            'id': point_id,
+            'vector': centroid.tolist(),
+            'payload': {
+                "cluster_id": cluster_id,
+                "post_count": len(vectors),
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "last_updated": end_date.isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"Error creating centroid for cluster {cluster_id}: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return None
+
+def save_centroids_batch(centroids_data, batch_size=1000):
+    """
+    Save centroids to Qdrant in batches.
+    
+    Args:
+        centroids_data (list): List of dictionaries with centroid data
+        batch_size (int): Size of each batch for saving
+    """
+    if not centroids_data:
+        return
+        
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    
+    try:
+        total_centroids = len(centroids_data)
+        logging.warning(f"\nSaving {total_centroids} centroids to Qdrant in batches of {batch_size}")
+        
+        # Process centroids in batches
+        for i in range(0, len(centroids_data), batch_size):
+            batch = centroids_data[i:i + batch_size]
+            batch_start = time.time()
+            
+            logging.warning(f"\nProcessing batch {i//batch_size + 1} of {(total_centroids + batch_size - 1)//batch_size}")
+            logging.warning(f"Batch size: {len(batch)} centroids")
+            
+            # Log some stats about this batch
+            cluster_ids = [c['payload']['cluster_id'] for c in batch]
+            post_counts = [c['payload']['post_count'] for c in batch]
+            logging.warning(f"Cluster IDs in batch: {cluster_ids}")
+            logging.warning(f"Post counts: {post_counts}")
+            
+            points = [
+                models.PointStruct(
+                    id=centroid['id'],
+                    vector=centroid['vector'],
+                    payload=centroid['payload']
+                )
+                for centroid in batch
+            ]
+            
+            # Save batch to Qdrant
+            client.upsert(
+                collection_name="cluster_centroids",
+                points=points
+            )
+            
+            batch_time = time.time() - batch_start
+            logging.warning(f"Saved batch to Qdrant - Took {batch_time:.2f} seconds")
+            
+        logging.warning(f"\nSuccessfully saved all {total_centroids} centroids to Qdrant")
+            
+    except Exception as e:
+        logging.error(f"Error saving centroids batch: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
+
 def cluster_all_posts(target_date, batch_size=10000):
     """
     Кластеризация постов для одного дня с использованием результатов кластеризации за прошлую неделю
@@ -186,44 +361,64 @@ def cluster_all_posts(target_date, batch_size=10000):
         batch_size (int): размер батча для кластеризации
     
     Returns:
-        tuple: (df_last_day, cluster_daily_counts, all_post_labels)
+        tuple: (df_last_day, all_post_labels)
         где all_post_labels это словарь {(post_id, public_id): cluster_id}
     """
+    if batch_size != 10000:
+        raise ValueError(f"Batch size must be 10000, got {batch_size}")
+        
     start_time = time.time()
     logging.warning(f"Starting clustering process for date: {target_date.date()}")
     
-    # Получаем даты за прошлую неделю
-    past_week_dates = []
-    for i in range(7):
-        past_date = target_date - timedelta(days=i+1)
-        past_week_dates.append(past_date)
-    past_week_dates = sorted(past_week_dates)
-    
-    # Получаем существующие кластеры за прошлую неделю
+    # Получаем существующие кластеры из Qdrant
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
     clusters_dict = {}
-    cluster_daily_counts = {}
     
-    # Получаем посты и кластеры за прошлую неделю
-    for past_date in past_week_dates:
-        # Получаем посты за день
-        df_past, embeddings_past, _ = get_posts_for_day(past_date, limit=None)
+    # Вычисляем дату неделю назад для фильтрации центроидов
+    week_ago = target_date - timedelta(days=7)
+    logging.warning(f"Retrieving centroids updated since: {week_ago.date()}")
+    
+    # Получаем центроиды из Qdrant с использованием батчинга, только те, что обновлялись за последнюю неделю
+    offset_id = None
+    centroid_batch_size = 1000
+    centroid_start = time.time()
+    
+    while True:
+        # Get next batch of points
+        points = client.scroll(
+            collection_name="cluster_centroids",
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="last_updated",
+                        range=models.DatetimeRange(
+                            gte=week_ago.isoformat()
+                        )
+                    )
+                ]
+            ),
+            limit=centroid_batch_size,
+            offset=offset_id,
+            with_payload=True,
+            with_vectors=True
+        )[0]
         
-        if len(df_past) > 0:
-            # Получаем существующие кластеры для этих постов
-            for _, row in df_past.iterrows():
-                if row.get('cluster_id', -1) != -1:
-                    cluster_id = row['cluster_id']
-                    if cluster_id not in clusters_dict:
-                        # Получаем эмбеддинги для этого кластера
-                        cluster_posts = df_past[df_past['cluster_id'] == cluster_id]
-                        cluster_embs = [embeddings_past[i] for i in cluster_posts.index]
-                        if cluster_embs:
-                            clusters_dict[cluster_id] = np.mean(cluster_embs, axis=0)
-                            
-                            # Инициализируем счетчик
-                            if cluster_id not in cluster_daily_counts:
-                                cluster_daily_counts[cluster_id] = {}
-                            cluster_daily_counts[cluster_id][past_date] = len(cluster_posts)
+        if not points:
+            break
+            
+        # Process points in this batch
+        for point in points:
+            cluster_id = point.payload['cluster_id']
+            clusters_dict[cluster_id] = point.vector
+        
+        # Update offset_id for next batch
+        offset_id = points[-1].id
+        
+        # If we got less than batch_size points, we've reached the end
+        if len(points) < centroid_batch_size:
+            break
+    
+    logging.warning(f"Retrieved {len(clusters_dict)} centroids from Qdrant (updated in the last week) - Took {time.time() - centroid_start:.2f} seconds")
     
     # Инициализируем DataFrame для текущего дня
     current_df = pd.DataFrame()
@@ -231,7 +426,22 @@ def cluster_all_posts(target_date, batch_size=10000):
     # Словарь для хранения меток всех постов
     all_post_labels = {}
     
-    last_cl = max(clusters_dict.keys()) + 1 if clusters_dict else 0
+    # Get all existing cluster IDs from Qdrant
+    cluster_id_start = time.time()
+    existing_clusters = client.scroll(
+        collection_name=os.getenv('QDRANT_COLLECTION'),
+        limit=1,
+        with_payload=True,
+        with_vectors=False,
+        order_by=models.OrderBy(
+            key="cluster_id",
+            direction="desc"
+        )
+    )[0]
+    max_existing_cluster_id = int(existing_clusters[0].payload['cluster_id']) if existing_clusters else -1
+    last_cl = max_existing_cluster_id + 1
+    logging.warning(f"Retrieved max cluster ID: {max_existing_cluster_id}, next ID will be: {last_cl} - Took {time.time() - cluster_id_start:.2f} seconds")
+    
     av_embeddings = []
     av_embeddings_date = []
     
@@ -241,13 +451,23 @@ def cluster_all_posts(target_date, batch_size=10000):
     has_more_posts = True
     total_posts_for_day = 0
     
+    # List to store centroids for batch processing
+    centroids_to_save = []
+    total_centroids_created = 0
+    total_centroids_updated = 0
+    
     while has_more_posts:
         batch_time = time.time()
         logging.warning(f"\nProcessing batch {batch_number} for {target_date.date()}")
         logging.warning(f"Total posts processed so far for this day: {total_posts_for_day}")
+        logging.warning(f"Centroids in memory: {len(centroids_to_save)}")
+        logging.warning(f"Total centroids created: {total_centroids_created}")
+        logging.warning(f"Total centroids updated: {total_centroids_updated}")
         
         # Получаем следующий батч постов
+        fetch_start = time.time()
         df_batch, embeddings_batch, last_post_date = get_posts_for_day(target_date, limit=batch_size, last_post_date=last_post_date)
+        logging.warning(f"Fetched batch of posts - Took {time.time() - fetch_start:.2f} seconds")
         
         if len(df_batch) == 0:
             logging.warning("Got empty batch, stopping pagination")
@@ -264,9 +484,13 @@ def cluster_all_posts(target_date, batch_size=10000):
         
         # Кластеризуем текущий батч
         cluster_start = time.time()
-        agglo = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, metric='cosine', linkage="average")
-        labels = agglo.fit_predict(embeddings_batch)
-        logging.warning(f"Agglomerative clustering completed - Took {time.time() - cluster_start:.2f} seconds")
+        try:
+            agglo = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, metric='cosine', linkage="average")
+            labels = agglo.fit_predict(embeddings_batch)
+            logging.warning(f"Agglomerative clustering completed - Took {time.time() - cluster_start:.2f} seconds")
+        except Exception as e:
+            logging.error(f"Error during clustering: {str(e)}")
+            raise RuntimeError(f"Clustering failed for batch {batch_number}: {str(e)}")
         
         # Фильтруем кластеры по размеру
         filter_start = time.time()
@@ -308,22 +532,23 @@ def cluster_all_posts(target_date, batch_size=10000):
                     # Обновляем центроид кластера
                     cluster_posts = df_batch[df_batch['label']==i]
                     cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
-                    clusters_dict[ind] = np.mean([clusters_dict[ind]] + cluster_embs, axis=0)
-                    
-                    # Обновляем количество постов
-                    if ind not in cluster_daily_counts:
-                        cluster_daily_counts[ind] = {}
-                    cluster_daily_counts[ind][target_date] = cluster_daily_counts[ind].get(target_date, 0) + len(cluster_posts)
+                    centroid_data = update_cluster_centroid(ind, cluster_embs, target_date)
+                    if centroid_data:
+                        centroids_to_save.append(centroid_data)
+                        total_centroids_updated += 1
                 else:
                     # Создаем новый кластер
                     new_cluster_id = i + last_cl
                     df_batch.loc[df_batch['label']==i, 'cluster'] = new_cluster_id
                     clusters_dict[new_cluster_id] = av_embeddings_date[i]
                     
-                    # Инициализируем счетчик
-                    if new_cluster_id not in cluster_daily_counts:
-                        cluster_daily_counts[new_cluster_id] = {}
-                    cluster_daily_counts[new_cluster_id][target_date] = len(df_batch[df_batch['label']==i])
+                    # Создаем новый центроид
+                    cluster_posts = df_batch[df_batch['label']==i]
+                    cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
+                    centroid_data = create_cluster_centroid(new_cluster_id, cluster_embs, target_date, target_date)
+                    if centroid_data:
+                        centroids_to_save.append(centroid_data)
+                        total_centroids_created += 1
         else:
             # Для первого батча создаем новые кластеры
             for i, c in enumerate(clusters):
@@ -331,16 +556,28 @@ def cluster_all_posts(target_date, batch_size=10000):
                 df_batch.loc[df_batch['label']==i, 'cluster'] = cluster_id
                 clusters_dict[cluster_id] = av_embeddings_date[i]
                 
-                # Инициализируем счетчик
-                if cluster_id not in cluster_daily_counts:
-                    cluster_daily_counts[cluster_id] = {}
-                cluster_daily_counts[cluster_id][target_date] = len(df_batch[df_batch['label']==i])
+                # Создаем новый центроид
+                cluster_posts = df_batch[df_batch['label']==i]
+                cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
+                centroid_data = create_cluster_centroid(cluster_id, cluster_embs, target_date, target_date)
+                if centroid_data:
+                    centroids_to_save.append(centroid_data)
+                    total_centroids_created += 1
+        
+        # Save centroids in batches if we have enough
+        if len(centroids_to_save) >= 1000:
+            save_start = time.time()
+            logging.warning(f"\nSaving batch of {len(centroids_to_save)} centroids to Qdrant")
+            save_centroids_batch(centroids_to_save)
+            logging.warning(f"Centroid batch saved - Took {time.time() - save_start:.2f} seconds")
+            centroids_to_save = []
         
         logging.warning(f"Compared with existing clusters - Took {time.time() - compare_start:.2f} seconds")
         
         # Обновляем last_cl
         if len(df_batch[df_batch['cluster'] != -1]) > 0:
             last_cl = max(df_batch['cluster'].max() + 1, last_cl)
+            logging.warning(f"Updated last_cl to: {last_cl}")
         
         # Сохраняем метки кластеров для текущего батча
         batch_post_labels = {}
@@ -370,10 +607,21 @@ def cluster_all_posts(target_date, batch_size=10000):
         del embeddings_batch
         logging.warning(f"Batch processing completed - Took {time.time() - batch_time:.2f} seconds")
     
+    # Save any remaining centroids
+    if centroids_to_save:
+        save_start = time.time()
+        logging.warning(f"\nSaving final batch of {len(centroids_to_save)} centroids to Qdrant")
+        save_centroids_batch(centroids_to_save)
+        logging.warning(f"Final centroid batch saved - Took {time.time() - save_start:.2f} seconds")
+    
     total_time = time.time() - start_time
     logging.warning(f"\nTotal clustering process completed - Took {total_time:.2f} seconds")
+    logging.warning(f"Total posts processed: {total_posts_for_day}")
+    logging.warning(f"Total clusters created: {total_centroids_created}")
+    logging.warning(f"Total clusters updated: {total_centroids_updated}")
+    logging.warning(f"Total clusters in memory: {len(centroids_to_save)}")
     
-    return current_df, cluster_daily_counts, all_post_labels
+    return current_df, all_post_labels
 
 def events_time_series(df, cluster_counts, dates):
     """Создание временных рядов для каждого события"""
@@ -502,13 +750,13 @@ def analyze_trends_for_period(start_date, end_date):
     dates = sorted(dates)
     
     # Кластеризуем посты, получая их день за днем
-    df_last_day, cluster_counts, all_post_labels = cluster_all_posts(dates[-1])
+    df_last_day, all_post_labels = cluster_all_posts(dates[-1])
     
     if len(df_last_day) == 0:
         return {"error": "No posts found for the specified period"}
     
     # Получаем временные ряды для каждого события
-    events = events_time_series(df_last_day, cluster_counts, dates)
+    events = events_time_series(df_last_day, all_post_labels, dates)
     
     # Анализируем всплески для каждого кластера
     trends = {}
@@ -521,7 +769,7 @@ def analyze_trends_for_period(start_date, end_date):
                 trends[event_id] = {
                     'bursts': bursts,
                     'posts': trend_posts[:5] if trend_posts else [],  # Берем первые 5 постов как пример
-                    'total_posts': sum(cluster_counts[event_id].values())  # Общее количество постов во всех днях
+                    'total_posts': sum(all_post_labels[event_id].values())  # Общее количество постов во всех днях
                 }
     
     # Добавляем метки постов в возвращаемый результат

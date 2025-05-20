@@ -38,7 +38,8 @@ def check_centroids(start_date, end_date):
             ]
         ),
         with_payload=True,
-        with_vectors=True
+        with_vectors=True,
+        limit = 1000
     )
     
     points = response[0]

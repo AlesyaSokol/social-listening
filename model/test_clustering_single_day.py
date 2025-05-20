@@ -36,22 +36,26 @@ def test_single_day_clustering():
         logging.warning("\nStarting clustering process...")
         cluster_start = time.time()
         
-        df_last_day, cluster_counts, all_post_labels = cluster_all_posts(test_date, batch_size=10000)
+        df_last_day, all_post_labels = cluster_all_posts(test_date, batch_size=10000)
         current_time = log_time(cluster_start, "Clustering completed")
         
         # Print detailed results
         logging.warning("\nClustering Results:")
         logging.warning(f"Total posts processed: {len(df_last_day)}")
+        
+        # Count posts per cluster
+        cluster_counts = {}
+        for (post_id, public_id), cluster_id in all_post_labels.items():
+            if cluster_id not in cluster_counts:
+                cluster_counts[cluster_id] = 0
+            cluster_counts[cluster_id] += 1
+        
         logging.warning(f"Number of clusters found: {len(cluster_counts)}")
         
         # Print cluster statistics
         if len(cluster_counts) > 0:
             logging.warning("\nCluster sizes:")
-            sizes = []
-            for cluster_id, daily_counts in cluster_counts.items():
-                cluster_size = daily_counts[test_date]
-                if cluster_size > 0:
-                    sizes.append((cluster_id, cluster_size))
+            sizes = [(cluster_id, count) for cluster_id, count in cluster_counts.items()]
             
             # Sort clusters by size and print
             for cluster_id, size in sorted(sizes, key=lambda x: x[1], reverse=True):

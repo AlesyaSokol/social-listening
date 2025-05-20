@@ -27,9 +27,10 @@ def get_posts_from_cluster(cluster_id):
         response = client.scroll(
             collection_name=os.getenv('QDRANT_COLLECTION'),
             scroll_filter=models.Filter(must=must_conditions),
-            limit=100,  # Limit to 100 posts
+            limit=1000,  # Limit to 100 posts
             with_payload=True,
-            with_vectors=True
+            with_vectors=True,
+            order_by="post_date"
         )
         
         points = response[0]
@@ -55,7 +56,7 @@ def get_posts_from_cluster(cluster_id):
 
 if __name__ == "__main__":
     # Get posts from cluster
-    cluster_id = 10
+    cluster_id = 42
     df = get_posts_from_cluster(cluster_id)
     
     if not df.empty:

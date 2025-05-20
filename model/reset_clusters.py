@@ -11,13 +11,11 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 dotenv.load_dotenv('.env')
 
-def reset_all_cluster_ids():
+def reset_all_cluster_ids(target_date):
     """
-    Reset cluster_id to -1 for all posts in Qdrant
+    Reset cluster_id to -1 for all posts in Qdrant for the given date
     """
     try:
-        target_date = datetime(2025, 5, 18)
-
         # Initialize Qdrant client
         client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=30.0)
         collection_name = os.getenv('QDRANT_COLLECTION')
@@ -55,7 +53,7 @@ def reset_all_cluster_ids():
                 ),
                 limit=batch_size,
                 offset=offset,
-                with_payload=True,
+                with_payload=False,
                 with_vectors=False  # We don't need vectors for this operation
             )
             
@@ -90,5 +88,17 @@ def reset_all_cluster_ids():
 
 if __name__ == "__main__":
     logger.info("Starting cluster ID reset process...")
-    total_updated = reset_all_cluster_ids()
+    
+    # Set date range
+    start_date = datetime(2025, 5, 12)
+    end_date = datetime(2025, 5, 18)
+    
+    # Process each day
+    current_date = start_date
+    while current_date <= end_date:
+        logger.info(f"\nProcessing date: {current_date.date()}")
+        total_updated = reset_all_cluster_ids(current_date)
+        logger.info(f"Completed processing for {current_date.date()}")
+        current_date += timedelta(days=1)
+    
     logger.info("Process completed.") 
