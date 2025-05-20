@@ -399,6 +399,24 @@ def save_centroids_batch(centroids_data, batch_size=1000):
         logging.error(traceback.format_exc())
         raise RuntimeError(f"Error saving centroids batch: {str(e)}")
 
+def update_clusters_dict_from_centroids(centroids_data, clusters_dict):
+    """
+    Update clusters_dict with the latest data from saved centroids.
+    
+    Args:
+        centroids_data (list): List of dictionaries with centroid data
+        clusters_dict (dict): Dictionary to update with latest centroid data
+    """
+    for centroid in centroids_data:
+        cluster_id = int(centroid['payload']['cluster_id'])
+        clusters_dict[cluster_id] = {
+            'vector': centroid['vector'],
+            'post_count': int(centroid['payload']['post_count']),
+            'start_date': centroid['payload']['start_date'],
+            'id': centroid['id']
+        }
+    return clusters_dict
+
 def cluster_all_posts(target_date, batch_size=10000):
     """
     Кластеризация постов для одного дня с использованием результатов кластеризации за прошлую неделю
@@ -693,7 +711,9 @@ def cluster_all_posts(target_date, batch_size=10000):
             save_start = time.time()
             logging.warning(f"\nSaving batch of {len(centroids_to_save)} centroids to Qdrant")
             save_centroids_batch(centroids_to_save)
-            logging.warning(f"Centroid batch saved - Took {time.time() - save_start:.2f} seconds")
+            # Update clusters_dict with the latest data
+            clusters_dict = update_clusters_dict_from_centroids(centroids_to_save, clusters_dict)
+            logging.warning(f"Centroid batch saved and clusters_dict updated - Took {time.time() - save_start:.2f} seconds")
             centroids_to_save = []
         
         logging.warning(f"Compared with existing clusters - Took {time.time() - compare_start:.2f} seconds")
@@ -736,7 +756,9 @@ def cluster_all_posts(target_date, batch_size=10000):
         save_start = time.time()
         logging.warning(f"\nSaving final batch of {len(centroids_to_save)} centroids to Qdrant")
         save_centroids_batch(centroids_to_save)
-        logging.warning(f"Final centroid batch saved - Took {time.time() - save_start:.2f} seconds")
+        # Update clusters_dict with the final batch data
+        clusters_dict = update_clusters_dict_from_centroids(centroids_to_save, clusters_dict)
+        logging.warning(f"Final centroid batch saved and clusters_dict updated - Took {time.time() - save_start:.2f} seconds")
     
     total_time = time.time() - start_time
     logging.warning(f"\nTotal clustering process completed - Took {total_time:.2f} seconds")

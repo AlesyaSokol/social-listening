@@ -30,7 +30,10 @@ def get_posts_from_cluster(cluster_id):
             limit=1000,  # Limit to 100 posts
             with_payload=True,
             with_vectors=True,
-            order_by="post_date"
+            order_by=models.OrderBy(
+                key="post_date",
+                direction="desc",  # default is "asc"
+            )
         )
         
         points = response[0]
@@ -56,7 +59,7 @@ def get_posts_from_cluster(cluster_id):
 
 if __name__ == "__main__":
     # Get posts from cluster
-    cluster_id = 2816
+    cluster_id = 39
     df = get_posts_from_cluster(cluster_id)
     
     if not df.empty:
@@ -65,6 +68,7 @@ if __name__ == "__main__":
         for i, row in df.iterrows():
             print(f"\n--- Post {i+1} ---")
             print(f"Date: {row['post_date']}")
+            print(f"Post id: {row['post_id']}")
             print(f"Text: {row['post_text']}")
             print("-" * 80)
     else:
