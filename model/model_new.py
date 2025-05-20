@@ -637,15 +637,15 @@ def cluster_all_posts(target_date, batch_size=10000):
                     # Создаем новый кластер
                     new_cluster_id = i + last_cl
                     df_batch.loc[df_batch['label']==i, 'cluster'] = new_cluster_id
+                    cluster_posts = df_batch[df_batch['label']==i]  # Get posts for this cluster
                     clusters_dict[new_cluster_id] = {
                         'vector': av_embeddings_date[i],
-                        'post_count': len(av_embeddings_date[i]),
+                        'post_count': len(cluster_posts),  # Use actual number of posts
                         'start_date': target_date.isoformat(),
                         'id': hash(new_cluster_id) % (2**63 - 1)
                     }
                     
                     # Get posts for new cluster
-                    cluster_posts = df_batch[df_batch['label']==i]
                     sample_posts = cluster_posts.sample(min(5, len(cluster_posts)))
                     
                     # Log posts in new cluster
@@ -665,15 +665,15 @@ def cluster_all_posts(target_date, batch_size=10000):
             for i, c in enumerate(clusters):
                 cluster_id = i + last_cl
                 df_batch.loc[df_batch['label']==i, 'cluster'] = cluster_id
+                cluster_posts = df_batch[df_batch['label']==i]  # Get posts for this cluster
                 clusters_dict[cluster_id] = {
                     'vector': av_embeddings_date[i],
-                    'post_count': len(av_embeddings_date[i]),
+                    'post_count': len(cluster_posts),  # Use actual number of posts
                     'start_date': target_date.isoformat(),
                     'id': hash(cluster_id) % (2**63 - 1)
                 }
                 
                 # Get posts for new cluster
-                cluster_posts = df_batch[df_batch['label']==i]
                 sample_posts = cluster_posts.sample(min(5, len(cluster_posts)))
                 
                 logging.warning(f"\nPosts in new cluster {cluster_id} (first batch):")
