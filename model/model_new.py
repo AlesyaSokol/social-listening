@@ -271,13 +271,28 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
         # Calculate new centroid using weighted average
         new_centroid = (np.array(current_vector) * current_count + np.sum(new_vectors_array, axis=0)) / (current_count + num_new_vectors)
         
+        # Calculate new count
+        new_count = current_count + num_new_vectors
+        
+        # Update existing_centroids immediately with new data
+        if existing_centroids is not None:
+            existing_centroids[cluster_id] = {
+                'vector': new_centroid.tolist(),
+                'post_count': new_count,
+                'start_date': current_start_date,
+                'id': current_id
+            }
+        
+        # Log the count update
+        logging.warning(f"Updating cluster {cluster_id} count: {current_count} + {num_new_vectors} = {new_count}")
+        
         # Return centroid data for batch processing
         return {
             'id': current_id,
             'vector': new_centroid.tolist(),
             'payload': {
                 "cluster_id": int(cluster_id),
-                "post_count": current_count + num_new_vectors,
+                "post_count": new_count,
                 "start_date": current_start_date,
                 "end_date": target_date.isoformat(),
                 "last_updated": target_date.isoformat()
