@@ -173,8 +173,8 @@ def update_qdrant_cluster_labels(post_labels):
                     should_conditions.append(
                         models.Filter(
                             must=[
-                                models.FieldCondition(key="post_id", match={"value": post_id}),
-                                models.FieldCondition(key="public_id", match={"value": public_id})
+                                models.FieldCondition(key="post_id", match={"value": int(post_id)}),
+                                models.FieldCondition(key="public_id", match={"value": int(public_id)})
                             ]
                         )
                     )
@@ -197,13 +197,13 @@ def update_qdrant_cluster_labels(post_labels):
                 retry_qdrant_operation(
                     client.set_payload,
                     collection_name=collection_name,
-                    payload={"cluster_id": cluster_id},
+                    payload={"cluster_id": int(cluster_id)},
                     points=points_selector
                 )
             
         except Exception as e:
             logging.error(f"Error updating cluster {cluster_id}: {str(e)}")
-            continue
+            raise  # Raise the exception instead of continuing
 
 def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centroids=None):
     """
@@ -238,7 +238,7 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
                     must=[
                         models.FieldCondition(
                             key="cluster_id",
-                            match=models.MatchValue(value=cluster_id)
+                            match=models.MatchValue(value=int(cluster_id))
                         )
                     ]
                 ),
@@ -253,7 +253,7 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
                 
             current_centroid = points[0]
             current_vector = current_centroid.vector
-            current_count = current_centroid.payload['post_count']
+            current_count = int(current_centroid.payload['post_count'])
             current_start_date = current_centroid.payload['start_date']
             current_id = current_centroid.id
         
@@ -269,7 +269,7 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
             'id': current_id,
             'vector': new_centroid.tolist(),
             'payload': {
-                "cluster_id": cluster_id,
+                "cluster_id": int(cluster_id),
                 "post_count": current_count + num_new_vectors,
                 "start_date": current_start_date,
                 "end_date": target_date.isoformat(),
@@ -356,10 +356,8 @@ def save_centroids_batch(centroids_data, batch_size=1000):
             logging.warning(f"Batch size: {len(batch)} centroids")
             
             # Log some stats about this batch
-            cluster_ids = [c['payload']['cluster_id'] for c in batch]
-            post_counts = [c['payload']['post_count'] for c in batch]
-            # logging.warning(f"Cluster IDs in batch: {cluster_ids}")
-            # logging.warning(f"Post counts: {post_counts}")
+            cluster_ids = [int(c['payload']['cluster_id']) for c in batch]
+            post_counts = [int(c['payload']['post_count']) for c in batch]
             
             points = [
                 models.PointStruct(
@@ -451,17 +449,13 @@ def cluster_all_posts(target_date, batch_size=10000):
             
         # Process points in this batch
         for point in points:
-            cluster_id = point.payload['cluster_id']
+            cluster_id = int(point.payload['cluster_id'])  # Convert to Python int
             clusters_dict[cluster_id] = {
                 'vector': point.vector,
-                'post_count': point.payload['post_count'],
+                'post_count': int(point.payload['post_count']),  # Convert to Python int
                 'start_date': point.payload['start_date'],
                 'id': point.id
             }
-            # logging.warning(f"Retrieved centroid for cluster {cluster_id}:")
-            # logging.warning(f"  - Post count: {point.payload['post_count']}")
-            # logging.warning(f"  - Start date: {point.payload['start_date']}")
-            # logging.warning(f"  - Last updated: {point.payload['last_updated']}")
         
         # Update offset_id for next batch
         offset_id = points[-1].id
