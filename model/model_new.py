@@ -286,7 +286,7 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
             }
         
         # Log the count update
-        logging.warning(f"Updating cluster {cluster_id} count: {current_count} + {num_new_vectors} = {new_count}")
+        # logging.warning(f"Updating cluster {cluster_id} count: {current_count} + {num_new_vectors} = {new_count}")
         
         # Return centroid data for batch processing
         return {
