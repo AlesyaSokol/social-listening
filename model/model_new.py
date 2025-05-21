@@ -784,24 +784,8 @@ def cluster_all_posts(target_date, batch_size=10000):
     logging.warning(f"Total clusters updated: {total_centroids_updated}")
     logging.warning(f"Total clusters in memory: {len(centroids_to_save)}")
     
-    return current_df, all_post_labels
+    # return current_df, all_post_labels
 
-def events_time_series(df, cluster_counts, dates):
-    """Создание временных рядов для каждого события"""
-    post_events = {}
-    
-    # Для каждого кластера создаем временной ряд из сохраненных счетчиков
-    for cluster_id, daily_counts in cluster_counts.items():
-        post_events[cluster_id] = [daily_counts[d] for d in dates]
-    
-    # Создаем временной ряд для общего количества постов
-    total_counts = []
-    for d in dates:
-        total = sum(counts[d] for counts in cluster_counts.values())
-        total_counts.append(total)
-    post_events['total'] = total_counts
-
-    return post_events
 
 def ensure_centroids_collection():
     """

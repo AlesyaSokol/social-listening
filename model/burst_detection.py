@@ -3,6 +3,77 @@ import pandas as pd
 from datetime import datetime, timedelta
 import logging
 import scipy.special as c
+import os
+import dotenv
+from qdrant_client import QdrantClient, models
+
+def get_cluster_counts_from_qdrant(cluster_ids, start_date, end_date):
+    """
+    Get daily post counts for specified clusters from Qdrant.
+    
+    Args:
+        cluster_ids (list): List of cluster IDs to get counts for
+        start_date (datetime): Start date for the period
+        end_date (datetime): End date for the period
+    
+    Returns:
+        dict: Dictionary with cluster counts in format {cluster_id: {date: count}}
+    """
+    # Load environment variables
+    dotenv.load_dotenv('.env')
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    
+    # Initialize cluster counts dictionary
+    cluster_counts = {cluster_id: {} for cluster_id in cluster_ids}
+    
+    # Generate list of dates
+    dates = []
+    current_date = start_date
+    while current_date <= end_date:
+        dates.append(current_date)
+        current_date += timedelta(days=1)
+    
+    # For each date, get counts for each cluster
+    for date in dates:
+        # Set date range for the current day
+        start_datetime = datetime(date.year, date.month, date.day)
+        end_datetime = start_datetime + timedelta(days=1) - timedelta(microseconds=1)
+        
+        # Get counts for each cluster
+        for cluster_id in cluster_ids:
+            try:
+                # Count points in Qdrant for this cluster and date
+                response = client.scroll(
+                    collection_name=os.getenv('QDRANT_COLLECTION'),
+                    scroll_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="cluster_id",
+                                match={"value": int(cluster_id)}
+                            ),
+                            models.FieldCondition(
+                                key="post_date",
+                                range=models.DatetimeRange(
+                                    gte=start_datetime.isoformat(),
+                                    lt=end_datetime.isoformat()
+                                )
+                            )
+                        ]
+                    ),
+                    limit=10000,  # We only need the count
+                    with_payload=False,
+                    with_vectors=False
+                )
+                
+                # Store the count
+                cluster_counts[cluster_id][date] = len(response[0])
+                
+            except Exception as e:
+                logging.error(f"Error getting count for cluster {cluster_id} on {date}: {str(e)}")
+                cluster_counts[cluster_id][date] = 0
+                raise e
+    
+    return cluster_counts
 
 def events_time_series(df, cluster_counts, dates):
     """Создание временных рядов для каждого события"""
