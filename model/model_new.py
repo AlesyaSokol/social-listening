@@ -11,6 +11,7 @@ import dotenv
 import logging
 import http.client
 import time
+import traceback
 
 # Set root logger to WARNING
 logging.getLogger().setLevel(logging.WARNING)
@@ -36,22 +37,23 @@ def retry_qdrant_operation(operation_func, *args, **kwargs):
         The result of the operation if successful
     """
     # Commented out retry mechanism to fail immediately on errors
-    # while True:
-    #     try:
-    #         return operation_func(*args, **kwargs)
-    #     except Exception as e:
-    #         logging.error(f"Error in Qdrant operation: {str(e)}")
-    #         logging.error("Retrying in 10 seconds...")
-    #         time.sleep(10)
-    #         continue
-    try:
-        return operation_func(*args, **kwargs)
-    except Exception as e:
-        logging.error(f"Error in Qdrant operation: {str(e)}")
-        logging.error("Full traceback:")
-        import traceback
-        traceback.print_exc()
-        raise  # Re-raise the exception to stop execution
+    while True:
+        try:
+            return operation_func(*args, **kwargs)
+        except Exception as e:
+            logging.error(f"Error in Qdrant operation: {str(e)}")
+            traceback.print_exc()
+            logging.error("Retrying in 10 seconds...")
+            time.sleep(10)
+            continue
+    # try:
+    #     return operation_func(*args, **kwargs)
+    # except Exception as e:
+    #     logging.error(f"Error in Qdrant operation: {str(e)}")
+    #     logging.error("Full traceback:")
+    #     import traceback
+    #     traceback.print_exc()
+    #     raise  # Re-raise the exception to stop execution
 
 print("Current working directory:", os.getcwd())
 print("Loading .env from:", os.path.abspath('.env'))
