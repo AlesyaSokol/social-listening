@@ -667,7 +667,7 @@ def cluster_all_posts(target_date, batch_size=10000):
                     if centroid_data:
                         centroids_to_save.append(centroid_data)
                         total_centroids_updated += 1
-                        logging.warning(f"Updated existing cluster {ind}")
+                        # logging.warning(f"Updated existing cluster {ind}")
                 else:
                     # Создаем новый кластер
                     new_cluster_id = i + last_cl
@@ -694,7 +694,7 @@ def cluster_all_posts(target_date, batch_size=10000):
                     if centroid_data:
                         centroids_to_save.append(centroid_data)
                         total_centroids_created += 1
-                        logging.warning(f"Created new cluster {new_cluster_id}")
+                        # logging.warning(f"Created new cluster {new_cluster_id}")
         else:
             # Для первого батча создаем новые кластеры
             for i, c in enumerate(clusters):
@@ -721,7 +721,7 @@ def cluster_all_posts(target_date, batch_size=10000):
                 if centroid_data:
                     centroids_to_save.append(centroid_data)
                     total_centroids_created += 1
-                    logging.warning(f"Created new cluster {cluster_id} (first batch)")
+                    # logging.warning(f"Created new cluster {cluster_id} (first batch)")
         
         # Save centroids in batches if we have enough
         if len(centroids_to_save) >= 1000:
