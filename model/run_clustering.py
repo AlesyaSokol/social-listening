@@ -24,7 +24,7 @@ def run_clustering_for_date_range(start_date, end_date):
         logging.warning(f"\nProcessing date: {current_date.date()}")
         try:
             cluster_all_posts(current_date, batch_size=10000)
-            logging.warning(f"Successfully processed {len(df_last_day)} posts")
+            logging.warning(f"Successfully processed posts")
         except Exception as e:
             logging.error(f"Error processing date {current_date.date()}: {str(e)}")
             logging.error("Full traceback:")
@@ -36,7 +36,7 @@ def run_clustering_for_date_range(start_date, end_date):
 
 if __name__ == "__main__":
     # Set date range
-    start_date = datetime(2025, 5, 13)
+    start_date = datetime(2025, 5, 14)
     end_date = datetime(2025, 5, 19)
     
     run_clustering_for_date_range(start_date, end_date) 
