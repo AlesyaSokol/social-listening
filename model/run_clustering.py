@@ -23,7 +23,7 @@ def run_clustering_for_date_range(start_date, end_date):
     while current_date <= end_date:
         logging.warning(f"\nProcessing date: {current_date.date()}")
         try:
-            df_last_day, all_post_labels = cluster_all_posts(current_date, batch_size=10000)
+            cluster_all_posts(current_date, batch_size=10000)
             logging.warning(f"Successfully processed {len(df_last_day)} posts")
         except Exception as e:
             logging.error(f"Error processing date {current_date.date()}: {str(e)}")
@@ -36,7 +36,7 @@ def run_clustering_for_date_range(start_date, end_date):
 
 if __name__ == "__main__":
     # Set date range
-    start_date = datetime(2025, 5, 12)
+    start_date = datetime(2025, 5, 13)
     end_date = datetime(2025, 5, 19)
     
     run_clustering_for_date_range(start_date, end_date) 
