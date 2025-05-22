@@ -12,6 +12,7 @@ import logging
 import http.client
 import time
 import traceback
+import psycopg2
 
 # Set root logger to WARNING
 logging.getLogger().setLevel(logging.WARNING)
@@ -615,16 +616,7 @@ def cluster_all_posts(target_date, batch_size=10000):
                 ind_sim = np.argmax(sim_emb)
                 ind = keys[ind_sim]
                 
-                # logging.warning(f"\nAnalyzing cluster {i} from current batch:")
-                # logging.warning(f"Best matching existing cluster: {ind}")
-                # logging.warning(f"Similarity score: {sim_emb[ind_sim]:.4f}")
-                # logging.warning(f"Number of posts in this cluster: {len(df_batch[df_batch['label']==i])}")
-                # if ind in clusters_dict:
-                #     logging.warning(f"Existing cluster info:")
-                #     logging.warning(f"  - Post count: {clusters_dict[ind]['post_count']}")
-                #     logging.warning(f"  - Start date: {clusters_dict[ind]['start_date']}")
-                
-                if sim_emb[ind_sim] > 0.6:
+                if sim_emb[ind_sim] > 0.5:
                     # Присваиваем существующий кластер
                     df_batch.loc[df_batch['label']==i, 'cluster'] = ind
                     
@@ -645,29 +637,13 @@ def cluster_all_posts(target_date, batch_size=10000):
                         with_vectors=False
                     )[0]
                     
-                    # # Log sample posts from existing cluster
-                    # if existing_posts:
-                    #     logging.warning("\nSample posts from existing cluster %d:", ind)
-                    #     sample_posts = random.sample(existing_posts, min(5, len(existing_posts)))
-                    #     for post in sample_posts:
-                    #         logging.warning("  - %s", post.payload['post_text'][:200] + "..." if len(post.payload['post_text']) > 200 else post.payload['post_text'])
-                    
-                    # # Get posts being added to this cluster
-                    cluster_posts = df_batch[df_batch['label']==i]
-                    # sample_new_posts = cluster_posts.sample(min(5, len(cluster_posts)))
-                    
-                    # # Log posts being added
-                    # logging.warning("\nPosts being added to cluster %d:", ind)
-                    # for _, post in sample_new_posts.iterrows():
-                    #     logging.warning("  - %s", post.get('post_text', '')[:200] + "..." if len(post.get('post_text', '')) > 200 else post.get('post_text', ''))
-                    
                     # Обновляем центроид кластера
+                    cluster_posts = df_batch[df_batch['label']==i]
                     cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
                     centroid_data = update_cluster_centroid(ind, cluster_embs, target_date, clusters_dict)
                     if centroid_data:
                         centroids_to_save.append(centroid_data)
                         total_centroids_updated += 1
-                        # logging.warning(f"Updated existing cluster {ind}")
                 else:
                     # Создаем новый кластер
                     new_cluster_id = i + last_cl
@@ -680,21 +656,12 @@ def cluster_all_posts(target_date, batch_size=10000):
                         'id': hash(new_cluster_id) % (2**63 - 1)
                     }
                     
-                    # # Get posts for new cluster
-                    # sample_posts = cluster_posts.sample(min(5, len(cluster_posts)))
-                    
-                    # # Log posts in new cluster
-                    # logging.warning("\nPosts in new cluster %d:", new_cluster_id)
-                    # for _, post in sample_posts.iterrows():
-                    #     logging.warning("  - %s", post.get('post_text', '')[:200] + "..." if len(post.get('post_text', '')) > 200 else post.get('post_text', ''))
-                    
                     # Создаем новый центроид
                     cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
                     centroid_data = create_cluster_centroid(new_cluster_id, cluster_embs, target_date, target_date)
                     if centroid_data:
                         centroids_to_save.append(centroid_data)
                         total_centroids_created += 1
-                        # logging.warning(f"Created new cluster {new_cluster_id}")
         else:
             # Для первого батча создаем новые кластеры
             for i, c in enumerate(clusters):
@@ -708,20 +675,12 @@ def cluster_all_posts(target_date, batch_size=10000):
                     'id': hash(cluster_id) % (2**63 - 1)
                 }
                 
-                # # Get posts for new cluster
-                # sample_posts = cluster_posts.sample(min(5, len(cluster_posts)))
-                
-                # logging.warning(f"\nPosts in new cluster {cluster_id} (first batch):")
-                # for _, post in sample_posts.iterrows():
-                #     logging.warning(f"  - {post.get('post_text', '')[:200]}...")
-                
                 # Создаем новый центроид
                 cluster_embs = [embeddings_batch[j] for j,_ in enumerate(cluster_posts.index)]
                 centroid_data = create_cluster_centroid(cluster_id, cluster_embs, target_date, target_date)
                 if centroid_data:
                     centroids_to_save.append(centroid_data)
                     total_centroids_created += 1
-                    # logging.warning(f"Created new cluster {cluster_id} (first batch)")
         
         # Save centroids in batches if we have enough
         if len(centroids_to_save) >= 1000:
@@ -776,6 +735,30 @@ def cluster_all_posts(target_date, batch_size=10000):
         # Update clusters_dict with the final batch data
         clusters_dict = update_clusters_dict_from_centroids(centroids_to_save, clusters_dict)
         logging.warning(f"Final centroid batch saved and clusters_dict updated - Took {time.time() - save_start:.2f} seconds")
+    
+    # Write total post count to database
+    try:
+        conn = psycopg2.connect(
+            dbname=os.getenv('POSTGRES_DB').strip('"'),
+            user=os.getenv('POSTGRES_USER').strip('"'),
+            password=os.getenv('POSTGRES_PASSWORD').strip('"'),
+            host=os.getenv('POSTGRES_HOST').strip('"'),
+            port=int(os.getenv('POSTGRES_PORT').strip('"'))
+        )
+        cur = conn.cursor()
+        
+        # Insert or update the count for this date
+        cur.execute(
+            "INSERT INTO posts_number (date, count) VALUES (%s, %s) ON CONFLICT (date) DO UPDATE SET count = EXCLUDED.count",
+            (target_date.date(), total_posts_for_day)
+        )
+        conn.commit()
+        logging.warning(f"Successfully wrote post count {total_posts_for_day} to database for date {target_date.date()}")
+        
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error writing post count to database: {str(e)}")
     
     total_time = time.time() - start_time
     logging.warning(f"\nTotal clustering process completed - Took {total_time:.2f} seconds")

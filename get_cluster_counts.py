@@ -5,7 +5,7 @@ def main():
     # Define parameters
     cluster_ids = [1, 2, 3]
     start_date = datetime(2025, 5, 12)
-    end_date = datetime(2025, 5, 13)
+    end_date = datetime(2025, 5, 19)
     
     # Get cluster counts from Qdrant
     print(f"Getting counts for clusters {cluster_ids} from {start_date.date()} to {end_date.date()}")
