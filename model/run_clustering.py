@@ -36,7 +36,7 @@ def run_clustering_for_date_range(start_date, end_date):
 
 if __name__ == "__main__":
     # Set date range
-    start_date = datetime(2025, 5, 14)
-    end_date = datetime(2025, 5, 19)
+    start_date = datetime(2025, 5, 20)
+    end_date = datetime(2025, 5, 21)
     
     run_clustering_for_date_range(start_date, end_date) 

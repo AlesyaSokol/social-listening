@@ -62,7 +62,7 @@ def plot_cluster_activity(cluster_id, start_date, end_date, save_path=None):
 
 def main():
     # Example usage
-    cluster_id = 8998  # Example cluster ID
+    cluster_id = 2114  # Example cluster ID
     end_date = datetime(2025, 5, 19)
     start_date = end_date - timedelta(days=7)
     

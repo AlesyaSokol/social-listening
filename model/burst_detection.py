@@ -8,6 +8,7 @@ import dotenv
 from qdrant_client import QdrantClient, models
 import psycopg2
 import json
+import random
 
 def get_cluster_counts_from_qdrant(cluster_ids, start_date, end_date):
     """
@@ -300,6 +301,28 @@ def get_majority_region(posts):
         return None
     
 
+ # GPT SUMMARY
+
+from openai import OpenAI
+
+OPENAI_API_KEY = os.getenv("OPENAI_APIKEY")
+client_openai = OpenAI(api_key = OPENAI_API_KEY)
+
+def ask_gpt(prompt, posts, model = 'gpt-4o-mini'):
+    chat_completion = client_openai.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": prompt + '\n\n'.join(posts),
+            }
+        ],
+        model=model
+    )
+    return chat_completion.choices[0].message.content
+
+prompt = "You're a newsroom helper. Summarize the posts in one caption (less than 30 words) containing the most common topic of the posts. Do NOT use any introductory words like 'The main topic is...', just formulate the topic itself. Answer in Russian. Posts:\n\n"
+    
+
 def analyze_trends_for_period(target_date, lookback_days):
     """
     Анализирует тренды для указанной даты, используя данные за предыдущие дни
@@ -526,7 +549,7 @@ def analyze_trends_for_period(target_date, lookback_days):
                 INSERT INTO model_output (title, cluster_id, related_posts, update_date, post_count, region)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                ('', burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
+                (ask_gpt(prompt, random.sample([b['text'] for b in burst['posts']], min(20, len(burst['posts'])))), burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
             )
         conn.commit()
         cur.close()
