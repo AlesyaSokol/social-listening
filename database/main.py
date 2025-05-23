@@ -3,7 +3,7 @@ import json
 import threading
 import requests
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import concurrent.futures
 import schedule
 from openai import OpenAI
@@ -12,10 +12,12 @@ import tiktoken
 import dotenv
 import os
 import numpy as np
+from model.model_new import cluster_all_posts
+from model.burst_detection import analyze_trends_for_period
 
-from fill_database import Database
+from database.fill_database import Database
 
-dotenv.load_dotenv('../.env')
+dotenv.load_dotenv('.env')
 
 OPENAI_APIKEY = os.getenv('OPENAI_APIKEY')  
 TOKEN_1 = os.getenv('TOKEN_1')  
@@ -166,9 +168,16 @@ def ScrappingPosts():
 
     db.add_last_upds(id_last_date)
 
+
+def main_scraping_and_clustering():
+    ScrappingPosts()
+    cluster_all_posts(datetime.now() - timedelta(days=1))
+    analyze_trends_for_period(datetime.now() - timedelta(days=1), 7)
+
+
 # Главная функция
 def main():
-    schedule.every().day.at("00:00").do(ScrappingPosts)
+    schedule.every().day.at("00:00").do(main_scraping_and_clustering)
     # print("Программа запущена. Выполняем первый запуск...")
     # ScrappingPosts()
     print("Ожидаем следующего запуска...")

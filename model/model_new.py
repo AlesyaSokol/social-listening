@@ -457,11 +457,11 @@ def cluster_all_posts(target_date, batch_size=10000):
     client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
     clusters_dict = {}
     
-    # Вычисляем дату неделю назад для фильтрации центроидов
-    week_ago = target_date - timedelta(days=7)
+    # Вычисляем дату две недели назад для фильтрации центроидов
+    week_ago = target_date - timedelta(days=14)
     logging.warning(f"Retrieving centroids updated since: {week_ago.date()}")
     
-    # Получаем центроиды из Qdrant с использованием батчинга, только те, что обновлялись за последнюю неделю
+    # Получаем центроиды из Qdrant с использованием батчинга, только те, что обновлялись за последние две недели
     offset_id = None
     centroid_batch_size = 1000
     centroid_start = time.time()
@@ -748,10 +748,13 @@ def cluster_all_posts(target_date, batch_size=10000):
         cur = conn.cursor()
         
         # Insert or update the count for this date
-        cur.execute(
-            "INSERT INTO posts_number (date, count) VALUES (%s, %s) ON CONFLICT (date) DO UPDATE SET count = EXCLUDED.count",
-            (target_date.date(), total_posts_for_day)
-        )
+        try:
+            cur.execute(
+                "INSERT INTO posts_number (date, count) VALUES (%s, %s)",
+                (target_date.date(), total_posts_for_day)
+            )
+        except Exception as e:
+            print(f"Error inserting data for {target_date.date()}: {str(e)}")
         conn.commit()
         logging.warning(f"Successfully wrote post count {total_posts_for_day} to database for date {target_date.date()}")
         

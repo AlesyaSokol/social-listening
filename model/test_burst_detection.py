@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime, timedelta
-from model.burst_detection import analyze_trends_for_period
+from burst_detection import analyze_trends_for_period
 
 # Configure logging
 logging.basicConfig(
@@ -14,8 +14,8 @@ def main():
     # dotenv.load_dotenv('.env')
     
     # Set target date and lookback period
-    target_date = datetime(2025, 5, 19)
-    lookback_days = 7
+    target_date = datetime(2025, 5, 21)
+    lookback_days = 9
     
     print(f"Analyzing trends for {target_date.date()} with {lookback_days} days lookback")
     
