@@ -77,7 +77,7 @@ def get_posts_for_day(target_date, limit=None, last_post_date=None):
         tuple: (DataFrame с постами, список эмбеддингов, дата последнего поста)
     """
     try:
-        client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=30.0)
+        client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=180.0)
         
         # Устанавливаем начало и конец дня
         start_date = datetime(target_date.year, target_date.month, target_date.day)
@@ -156,7 +156,7 @@ def update_qdrant_cluster_labels(post_labels):
     Args:
         post_labels: dict, словарь {(post_id, public_id): cluster_id}
     """
-    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=30.0)
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=180.0)
     collection_name = os.getenv('QDRANT_COLLECTION')
     
     # Группируем обновления по cluster_id для эффективности
@@ -229,7 +229,7 @@ def update_cluster_centroid(cluster_id, new_vectors, target_date, existing_centr
     Returns:
         dict: Dictionary with centroid data for batch processing
     """
-    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=180.0)
     
     try:
         # Get current centroid and post count
@@ -366,7 +366,7 @@ def save_centroids_batch(centroids_data, batch_size=1000):
     if not centroids_data:
         return
         
-    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=180.0)
     
     try:
         total_centroids = len(centroids_data)
@@ -454,7 +454,7 @@ def cluster_all_posts(target_date, batch_size=10000):
     logging.warning(f"Starting clustering process for date: {target_date.date()}")
     
     # Получаем существующие кластеры из Qdrant
-    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'))
+    client = QdrantClient(url=os.getenv('QDRANT_ADDRESS'), timeout=180.0)
     clusters_dict = {}
     
     # Вычисляем дату две недели назад для фильтрации центроидов
@@ -780,7 +780,8 @@ def ensure_centroids_collection():
     """
     qdrant_client = QdrantClient(
         url=os.getenv("QDRANT_ADDRESS"),
-        api_key=os.getenv("QDRANT_API_KEY", None)
+        api_key=os.getenv("QDRANT_API_KEY", None),
+        timeout=180.0
     )
     
     collection_name = "cluster_centroids"
@@ -823,7 +824,8 @@ def calculate_cluster_centroids(start_date, end_date, cluster_ids):
     # Initialize Qdrant client
     qdrant_client = QdrantClient(
         url=os.getenv("QDRANT_ADDRESS"),
-        api_key=os.getenv("QDRANT_API_KEY", None)
+        api_key=os.getenv("QDRANT_API_KEY", None),
+        timeout=180.0
     )
     
     # Dictionary to store cluster centroids

@@ -9,6 +9,7 @@ from qdrant_client import QdrantClient, models
 import psycopg2
 import json
 import random
+from decimal import Decimal, getcontext
 
 def get_cluster_counts_from_qdrant(cluster_ids, start_date, end_date):
     """
@@ -125,15 +126,16 @@ def tau(i1,i2,gamma,n):
         return (i2-i1) * gamma * np.log(n)
 
 def fit(d, r, p):
+    getcontext().prec = 100
     try:
-        comb = float(c.comb(d, r))
-        prob = (p**r) * ((1-p)**(d-r))
+        comb = Decimal(c.comb(d, r, exact = True))
+        prob = (Decimal(p)**Decimal(r)) * ((1-Decimal(p))**(Decimal(d)-Decimal(r)))
         val = comb * prob
-        if val <= 0 or np.isnan(val):
+        if val <= 0 or val.is_nan():
             # Log the problematic values for debugging
             print(f"fit() warning: d={d}, r={r}, p={p}, comb={comb}, prob={prob}, val={val}")
-            return 1000  # or a large value
-        return -np.log(val)
+            return 1e10  # or a large value
+        return -val.ln()
     except Exception as e:
         print(f"fit() exception: d={d}, r={r}, p={p}, error={e}")
         return np.inf
@@ -168,9 +170,9 @@ def burst_detection(r,d,n,s,gamma,smooth_win):
     for t in range(int((smooth_win-1)/2),(int((smooth_win-1)/2))+real_n):
         for j in range(k): 
             if t==0:
-                cost[t,j] = fit(d[t],r[t],p[j])
+                cost[t,j] = float(fit(d[t],r[t],p[j]))
             else:
-                cost[t,j] = tau(q[t-1],j,gamma,real_n) + fit(d[t],r[t],p[j])
+                cost[t,j] = tau(q[t-1],j,gamma,real_n) + float(fit(d[t],r[t],p[j]))
         q[t] = np.argmin(cost[t, :])
 
     return q, d, r, p
