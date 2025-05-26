@@ -303,27 +303,45 @@ def get_majority_region(posts):
         return None
     
 
- # GPT SUMMARY
+ # GEMINI SUMMARY
 
-from openai import OpenAI
+from google import genai
+client_g = genai.Client(api_key=os.getenv('GEMINI_API_KEY').strip('"'))
 
-OPENAI_API_KEY = os.getenv("OPENAI_APIKEY")
-client_openai = OpenAI(api_key = OPENAI_API_KEY)
-
-def ask_gpt(prompt, posts, model = 'gpt-4o-mini'):
-    chat_completion = client_openai.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": prompt + '\n\n'.join(posts),
-            }
-        ],
-        model=model
+def ask_gemini(prompt, text, model = "gemini-2.0-flash"):
+    
+    response = client_g.models.generate_content(
+        model=model, contents=prompt + '\n\n' + text
     )
-    return chat_completion.choices[0].message.content
+    res = response.text
+
+    return res
 
 prompt = "You're a newsroom helper. Summarize the posts in one caption (less than 30 words) containing the most common topic of the posts. Do NOT use any introductory words like 'The main topic is...', just formulate the topic itself. Answer in Russian. Posts:\n\n"
     
+prompt_topic = """Относится ли следующее сообщение к одной из следующих тем:
+- События, происходящие не в России
+- Праздники, мероприятия и выставки
+- Фразы, не похожие на новостные заголовки
+- Продажи и реклама
+- Пропажа животных и отдача их в хорошие руки
+- Проблемы в семье
+- Восхищение природой
+- Рецепты
+- Вакансии
+- Хэштеги
+
+Ответь "да" или "нет", если сообщение подходит хотя бы под один из критериев выше. Коротко объясни свой ответ. Ответь в следующем формате: 
+
+Ответ: да/нет
+Объяснение: твое объяснение
+
+Сообщение:"""
+
+def check_burst_topic(topic):
+    res = ask_gemini(prompt_topic, topic)
+    return res, True if 'да' in res[:12] else False
+
 
 def analyze_trends_for_period(target_date, lookback_days):
     """
@@ -546,12 +564,15 @@ def analyze_trends_for_period(target_date, lookback_days):
         for burst in bursts_list:
             # Prepare related_posts as JSON or array
             related_posts = json.dumps(burst['posts'])
+            topic = ask_gemini(prompt, '/n/n'.join(random.sample([b['text'] for b in burst['posts']], min(20, len(burst['posts'])))))
+            res, topic_check = check_burst_topic(topic)
+            topic_check = not topic_check
             cur.execute(
                 """
-                INSERT INTO model_output (title, cluster_id, related_posts, update_date, post_count, region)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO model_output (title, interesting, full_response, cluster_id, related_posts, update_date, post_count, region)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (ask_gpt(prompt, random.sample([b['text'] for b in burst['posts']], min(20, len(burst['posts'])))), burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
+                (topic, topic_check, res, burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
             )
         conn.commit()
         cur.close()
