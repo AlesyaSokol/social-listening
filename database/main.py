@@ -130,6 +130,7 @@ def ProcessWithToken(ids_and_dates, token, token_id):
         if posts:
             # id_last_date.append([owner_id, datetime.fromtimestamp(posts[0]['date'], tz=timezone.utc)])
             counter += WriteToDB(posts, owner_id)
+            update_date = posts[-1]['date']
 
             while len(posts) == 100:
                 offset += 100
@@ -138,6 +139,7 @@ def ProcessWithToken(ids_and_dates, token, token_id):
                     break
                 update_date = posts[-1]['date']
                 counter += WriteToDB(posts, owner_id)
+                
             print(datetime.fromtimestamp(update_date, tz=timezone.utc) == last_date)
             db.add_last_upd(owner_id, datetime.fromtimestamp(update_date, tz=timezone.utc))
             print("Обновлена дата для:", owner_id, "Новая дата:", datetime.fromtimestamp(posts[0]['date']))
