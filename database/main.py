@@ -82,7 +82,7 @@ def GetPosts(owner_id, offset, token, last_date_obj):
                 response_owner.json()):
             items = response_owner.json().get('response', {}).get('items', [])
             filtered_items = [
-                post for post in items if datetime.fromtimestamp(post['date']) >= last_date_obj
+                post for post in items if datetime.fromtimestamp(post['date']) > last_date_obj
             ]
             return filtered_items
         else:
@@ -130,19 +130,18 @@ def ProcessWithToken(ids_and_dates, token, token_id):
         if posts:
             # id_last_date.append([owner_id, datetime.fromtimestamp(posts[0]['date'], tz=timezone.utc)])
             counter += WriteToDB(posts, owner_id)
-            update_date = posts[-1]['date']
+            update_date =  max([p['date'] for p in posts])
 
             while len(posts) == 100:
                 offset += 100
                 posts = GetPosts(owner_id, offset, token, last_date)
                 if not posts:
                     break
-                update_date = posts[-1]['date']
+                # update_date = posts[-1]['date']
                 counter += WriteToDB(posts, owner_id)
                 
-            print(datetime.fromtimestamp(update_date, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S') == last_date)
             db.add_last_upd(owner_id, datetime.fromtimestamp(update_date, tz=timezone.utc))
-            print("Обновлена дата для:", owner_id, "Новая дата:", update_date)
+            print("Обновлена дата для:", owner_id, "Новая дата:", datetime.fromtimestamp(update_date, tz=timezone.utc))
 
         print(f"Всего обработано {counter} постов для ID: {owner_id}")
 
