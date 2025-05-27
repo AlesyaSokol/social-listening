@@ -90,8 +90,8 @@ if __name__ == "__main__":
     logger.info("Starting cluster ID reset process...")
     
     # Set date range
-    start_date = datetime(2025, 5, 24)
-    end_date = datetime(2025, 5, 24)
+    start_date = datetime(2025, 5, 25)
+    end_date = datetime(2025, 5, 26)
     
     # Process each day
     current_date = start_date

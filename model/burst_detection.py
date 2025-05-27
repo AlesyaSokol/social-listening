@@ -319,28 +319,29 @@ def ask_gemini(prompt, text, model = "gemini-2.0-flash"):
 
 prompt = "You're a newsroom helper. Summarize the posts in one caption (less than 30 words) containing the most common topic of the posts. Do NOT use any introductory words like 'The main topic is...', just formulate the topic itself. Answer in Russian. Posts:\n\n"
     
-prompt_topic = """Относится ли следующее сообщение к одной из следующих тем:
-- События, происходящие не в России
-- Праздники, мероприятия и выставки
-- Фразы, не похожие на новостные заголовки
-- Продажи и реклама
-- Пропажа животных и отдача их в хорошие руки
-- Проблемы в семье
-- Восхищение природой
-- Рецепты
-- Вакансии
-- Хэштеги
+prompt_topic = """Determine whether the following message relates to any of the following topics. Answer "yes" or "no":
 
-Ответь "да" или "нет", если сообщение подходит хотя бы под один из критериев выше. Коротко объясни свой ответ. Ответь в следующем формате: 
+- Events taking place outside of Russia and Ukraine
+- Holidays, events and exhibitions
+- Phrases NOT similar to news headlines
+- Sales and advertising
+- Missing animals and putting them in good hands
+- Problems in the family
+- Admiring nature, except for abnormal weather conditions
+- Recipes
+- Jobs
+- Hashtags
 
-Ответ: да/нет
-Объяснение: твое объяснение
+Answer "yes" or "no" if the post fits at least one of the criteria above. If you're not sure, answer "no." Briefly explain your answer. Answer in the following format: 
 
-Сообщение:"""
+Answer: yes/no
+Explanation: your explanation
+
+Message:"""
 
 def check_burst_topic(topic):
     res = ask_gemini(prompt_topic, topic)
-    return res, True if 'да' in res[:12] else False
+    return res, True if 'yes' in res[:12] else False
 
 
 def analyze_trends_for_period(target_date, lookback_days):

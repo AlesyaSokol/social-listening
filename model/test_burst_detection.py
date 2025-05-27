@@ -14,7 +14,7 @@ def main():
     # dotenv.load_dotenv('.env')
     
     # Set target date and lookback period
-    target_date = datetime(2025, 5, 24)
+    target_date = datetime(2025, 5, 26)
     lookback_days = 14
     
     print(f"Analyzing trends for {target_date.date()} with {lookback_days} days lookback")
