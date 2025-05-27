@@ -66,14 +66,14 @@ class Database:
         except Exception as e:
             print(e)
 
-    def add_last_upds(self, last_upds):
+    def add_last_upd(self, public_id, update_date):
         sql0 = """DELETE FROM last_upds WHERE public_id = %s AND update_date < %s;"""
         sql = """INSERT INTO last_upds (public_id, update_date) VALUES (%s, %s);"""
         try:
-            self.cur.executemany(sql0, last_upds)
+            self.cur.execute(sql0, (public_id, update_date))
             self.conn.commit()
 
-            self.cur.executemany(sql, last_upds)
+            self.cur.execute(sql, (public_id, update_date))
             self.conn.commit()
         except Exception as e:
             print(e)
