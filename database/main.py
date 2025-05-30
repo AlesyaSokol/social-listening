@@ -168,8 +168,6 @@ def ScrappingPosts():
 
     #     concurrent.futures.wait([future1, future2])
 
-    db.add_last_upds(id_last_date)
-
 
 def main_scraping_and_clustering():
     ScrappingPosts()
