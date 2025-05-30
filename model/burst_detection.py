@@ -331,6 +331,7 @@ prompt_topic = """Determine whether the following message relates to any of the 
 - Recipes
 - Jobs
 - Hashtags
+- Calls to subscribe to a channel
 
 Answer "yes" or "no" if the post fits at least one of the criteria above. If you're not sure, answer "no." Briefly explain your answer. Answer in the following format: 
 
