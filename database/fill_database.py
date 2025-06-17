@@ -67,7 +67,7 @@ class Database:
             print(e)
 
     def add_last_upd(self, public_id, update_date):
-        sql0 = """DELETE FROM last_upds WHERE public_id = %s AND update_date < %s;"""
+        sql0 = """DELETE FROM last_upds WHERE public_id = %s AND update_date <= %s;"""
         sql = """INSERT INTO last_upds (public_id, update_date) VALUES (%s, %s);"""
         try:
             self.cur.execute(sql0, (public_id, update_date))
