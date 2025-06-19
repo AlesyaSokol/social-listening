@@ -14,6 +14,7 @@ import os
 import numpy as np
 from model.model_new import cluster_all_posts
 from model.burst_detection import analyze_trends_for_period
+from bot import send_update_tg
 
 from database.fill_database import Database
 
@@ -167,6 +168,21 @@ def ScrappingPosts():
     #     future2 = executor.submit(ProcessWithToken, ids_token2, token2, 2)
 
     #     concurrent.futures.wait([future1, future2])
+
+
+def send_update():
+    ddate = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    rows = Database.get_model_output(ddate)
+
+    text = ''
+    for row in rows:
+        text += f'*{row[0]}*\n{row[2]} постов\nПримеры: '
+        for i in range(min(len(row[1]), 5)):
+            text += f'[{i+1}]({row[1][i]["link"]}) '
+        text += '\n\n'
+    print(text)
+    
+    send_update_tg(text)
 
 
 def main_scraping_and_clustering():
