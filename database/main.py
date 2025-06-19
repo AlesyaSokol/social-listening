@@ -14,7 +14,7 @@ import os
 import numpy as np
 from model.model_new import cluster_all_posts
 from model.burst_detection import analyze_trends_for_period
-from bot import send_update_tg
+from database.bot import send_update_tg
 
 from database.fill_database import Database
 
