@@ -103,7 +103,7 @@ class Database:
     def get_model_output(self, ddate):
         try:
             self.cur.execute("""SELECT title, related_posts, post_count FROM model_output
-                                WHERE update_date >= %s
+                                WHERE update_date >= %s AND interesting
                                 ORDER BY post_count DESC
                                 LIMIT 10;""", (ddate,))
             rows = self.cur.fetchall()
