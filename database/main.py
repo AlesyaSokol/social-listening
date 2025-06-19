@@ -187,6 +187,7 @@ def main_scraping_and_clustering():
     ScrappingPosts()
     cluster_all_posts(datetime.now() - timedelta(days=1))
     analyze_trends_for_period(datetime.now() - timedelta(days=1), 14)
+    send_update()
 
 
 # Главная функция
