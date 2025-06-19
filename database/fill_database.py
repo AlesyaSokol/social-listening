@@ -100,6 +100,20 @@ class Database:
             print(e)
             self.conn.rollback()
 
+    def get_model_output(self, ddate):
+        try:
+            self.cur.execute("""SELECT title, related_posts, post_count FROM model_output
+                                WHERE update_date >= %s
+                                ORDER BY post_count DESC
+                                LIMIT 10;""", (ddate,))
+            rows = self.cur.fetchall()
+            self.conn.commit()
+
+            return rows
+        except Exception as e:
+            print(e)
+            self.conn.rollback()
+
 
 def fill_regions():
     import pandas as pd
