@@ -175,8 +175,8 @@ def send_update():
     rows = db.get_model_output(ddate)
 
     text = f'*Тренды ВКонтакте на {(datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')}*\n\n'
-    for row in rows:
-        text += f'*{row[0]}*\n{row[2]} постов\nПримеры: '
+    for n, row in enumerate(rows):
+        text += f'*{n+1}. {row[0]}*_{row[2]}_ постов\nПримеры: '
         for i in range(min(len(row[1]), 5)):
             text += f'[{i+1}]({row[1][i]["link"]}) '
         text += '\n\n'
