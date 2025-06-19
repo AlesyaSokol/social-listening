@@ -172,7 +172,7 @@ def ScrappingPosts():
 
 def send_update():
     ddate = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    rows = Database.get_model_output(ddate)
+    rows = db.get_model_output(ddate)
 
     text = ''
     for row in rows:
