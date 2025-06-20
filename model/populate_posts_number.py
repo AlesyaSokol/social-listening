@@ -83,8 +83,8 @@ def main():
     cur = conn.cursor()
     
     # Define date range
-    start_date = datetime(2025, 5, 25)
-    end_date = datetime(2025, 5, 29)
+    start_date = datetime(2025, 6, 5)
+    end_date = datetime(2025, 6, 18)
     
     # Generate list of dates
     current_date = start_date
