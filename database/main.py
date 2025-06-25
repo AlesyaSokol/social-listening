@@ -178,7 +178,7 @@ def send_update():
     text = f'*Тренды ВКонтакте на {(datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')}*\n\n'
     for n, row in enumerate(rows):
         text += f'*{n+1}. {row[0]}*_{row[2]}_ постов\nПримеры: '
-        for el in random.sample(row[1], 5):
+        for i, el in enumerate(random.sample(row[1], 5)):
             text += f'[{i+1}]({el["link"]}) '
         text += '\n\n'
     send_update_tg(text)
