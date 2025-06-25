@@ -12,6 +12,7 @@ import tiktoken
 import dotenv
 import os
 import numpy as np
+import random
 from model.model_new import cluster_all_posts
 from model.burst_detection import analyze_trends_for_period
 from database.bot import send_update_tg
@@ -177,8 +178,8 @@ def send_update():
     text = f'*Тренды ВКонтакте на {(datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')}*\n\n'
     for n, row in enumerate(rows):
         text += f'*{n+1}. {row[0]}*_{row[2]}_ постов\nПримеры: '
-        for i in range(min(len(row[1]), 5)):
-            text += f'[{i+1}]({row[1][i]["link"]}) '
+        for el in random.sample(row[1], 5):
+            text += f'[{i+1}]({el["link"]}) '
         text += '\n\n'
     send_update_tg(text)
 
