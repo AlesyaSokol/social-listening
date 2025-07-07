@@ -300,7 +300,7 @@ def get_majority_region(posts):
     if count > len(posts) / 2:
         return most_common_region
     else:
-        return None
+        return str(None)
     
 
  # GEMINI SUMMARY
@@ -576,7 +576,7 @@ def analyze_trends_for_period(target_date, lookback_days):
                 INSERT INTO model_output (title, interesting, full_response, cluster_id, related_posts, update_date, post_count, region)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (topic, topic_check, res, burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
+                (str(topic), topic_check, str(res), burst['cluster_id'], related_posts, target_date.date(), burst['number_of_posts'], get_majority_region(burst['posts']))
             )
         conn.commit()
         cur.close()
